@@ -7,6 +7,11 @@ type ChatResponse = {
   emotion: string;
   intensity: number;
   themes: string[];
+  debug: {
+    pos_score: number;
+    neg_score: number;
+    word_count: number;
+  };
 };
 
 type Message = {
@@ -50,8 +55,12 @@ export default function Home() {
           text: `${data.reply}
 
 emotion: ${data.emotion}
-intensity: ${data.intensity.toFixed(2)}
-themes: ${data.themes.join(", ")}`,
+intensity: ${data.intensity}
+themes: ${data.themes?.join(", ")}
+
+pos: ${data.debug?.pos_score}
+neg: ${data.debug?.neg_score}
+words: ${data.debug?.word_count}`,  
         },
       ]);
     } catch (error) {
