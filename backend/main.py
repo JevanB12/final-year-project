@@ -58,7 +58,14 @@ def tokenize(text: str) -> list:
     return text.split()
 
 
-NEGATION_WORDS = {"not", "no", "never"}
+NEGATION_WORDS = {"not", "no", "never", "havent", "haven't", "isnt", "isn't"}
+
+negated_wellbeing_phrases = {
+    "not feeling good": 2, "not doing well": 2, "not feeling great": 2
+}
+lack_phrases = {
+    "not enough sleep": 3, "not enough rest": 3, "not enough time": 3
+}
 
 def extract_sentiment(text: str):
     words = tokenize(text)
@@ -85,6 +92,16 @@ def extract_sentiment(text: str):
         if phrase in text:
             pos_score += weight
     for phrase, weight in negative_phrases.items():
+        if phrase in text:
+            neg_score += weight
+
+    # negated wellbeing phrases
+    for phrase, weight in negated_wellbeing_phrases.items():
+        if phrase in text:
+            neg_score += weight
+
+    # lack-related phrases
+    for phrase, weight in lack_phrases.items():
         if phrase in text:
             neg_score += weight
 
