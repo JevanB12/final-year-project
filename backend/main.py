@@ -3,7 +3,6 @@ from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
@@ -126,15 +125,35 @@ def extract_points(words):
     return positives, negatives
 
 
-def generate_reply(tone, themes):
+def generate_reply(tone, themes, intensity):
+    base_response = ""
+    
     if tone == "positive":
-        return "Sounds like a good day overall."
+        base_response = "Sounds like a good day overall."
     elif tone == "negative":
-        return "That sounds like a tough day."
+        base_response = "That sounds like a tough day."
     elif tone == "mixed":
-        return "Seems like there were both good and challenging parts."
+        base_response = "Seems like there were both good and challenging parts."
     else:
-        return "Got it — tell me more."
+        base_response = "Got it — tell me more."
+    
+    # Theme-specific tweaks
+    theme_addition = ""
+    if "work" in themes:
+        theme_addition = " Especially with work stuff going on."
+    elif "sleep" in themes or "tired" in themes:
+        theme_addition = " Getting rest is important."
+    elif "exercise" in themes:
+        theme_addition = " Nice that you're staying active."
+    elif "social" in themes:
+        theme_addition = " Connection with people matters."
+    
+    # Intensity-aware coda
+    intensity_coda = ""
+    if intensity > 0.7:
+        intensity_coda = " Sounds pretty intense."
+    
+    return base_response + theme_addition + intensity_coda
 
 # --- ROUTE ---
 
@@ -142,19 +161,18 @@ def generate_reply(tone, themes):
 def chat(payload: Message):
     words = normalize(payload.message)
 
+    words = normalize(payload.message)
+
     pos, neg = extract_sentiment(words)
     tone = extract_tone(pos, neg)
     intensity = extract_intensity(pos, neg, payload.message, len(words))
     themes = extract_themes(words)
-    pos_points, neg_points = extract_points(words)
 
-    reply = generate_reply(tone, themes)
+    reply = generate_reply(tone, themes, intensity)
 
     return {
         "reply": reply,
-        "tone": tone,
+        "emotion": tone,
         "intensity": intensity,
-        "themes": themes,
-        "positive_points": pos_points,
-        "negative_points": neg_points
+        "themes": themes
     }

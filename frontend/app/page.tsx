@@ -4,11 +4,9 @@ import { useState } from "react";
 
 type ChatResponse = {
   reply: string;
-  tone: string;
+  emotion: string;
   intensity: number;
   themes: string[];
-  positive_points: string[];
-  negative_points: string[];
 };
 
 type Message = {
@@ -51,12 +49,9 @@ export default function Home() {
           sender: "assistant",
           text: `${data.reply}
 
-tone: ${data.tone}
+emotion: ${data.emotion}
 intensity: ${data.intensity.toFixed(2)}
-themes: ${data.themes.join(", ")}
-
-+ ${data.positive_points.join(", ")}
-- ${data.negative_points.join(", ")}`,
+themes: ${data.themes.join(", ")}`,
         },
       ]);
     } catch (error) {
