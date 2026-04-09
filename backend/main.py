@@ -58,18 +58,25 @@ def tokenize(text: str) -> list:
     return text.split()
 
 
+NEGATION_WORDS = {"not", "no", "never"}
+
 def extract_sentiment(text: str):
     words = tokenize(text)
     pos_score = 0
     neg_score = 0
 
-    # single-word scoring with intensifiers
+    # single-word scoring with intensifiers and negation handling
     for i, word in enumerate(words):
         multiplier = 1.0
-        if i > 0 and words[i - 1] in intensifiers:
-            multiplier = intensifiers[words[i - 1]]
+        prev_word = words[i - 1] if i > 0 else None
+        if prev_word in intensifiers:
+            multiplier = intensifiers[prev_word]
+        negated = prev_word in NEGATION_WORDS
         if word in positive_words:
-            pos_score += positive_words[word] * multiplier
+            if negated:
+                neg_score += positive_words[word] * multiplier
+            else:
+                pos_score += positive_words[word] * multiplier
         if word in negative_words:
             neg_score += negative_words[word] * multiplier
 
