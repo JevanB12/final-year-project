@@ -32,7 +32,7 @@ themes_map = {
     "sleep": ["sleep", "slept", "rest", "bed", "bedtime", "nap", "morning"],
     "movement": ["gym", "walk", "run", "workout", "exercise", "training"],
     "social": ["friend", "friends", "family", "social", "people", "met"],
-    "recovery": ["break", "rest", "breathe", "recover", "pause", "reset", "free time", "time to myself"]
+    "recovery": ["break", "rest", "breathe", "recover", "pause", "reset", "free time", "time to myself", "drained", "draining", "tired", "exhausted", "low energy", "burnt out"]
 }
 positive_phrases = {
     "felt good": 2, "went well": 2, "pretty good": 2, "had fun": 2, "got stuff done": 2, "good session": 2
