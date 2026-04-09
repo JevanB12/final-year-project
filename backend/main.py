@@ -66,11 +66,11 @@ def extract_sentiment(words):
 
 
 def extract_tone(pos, neg):
-    if pos > neg:
-        return "positive"
-    elif neg > pos:
+    if neg > pos:
         return "negative"
-    elif pos > 0 and neg > 0:
+    elif pos > neg:
+        return "positive"
+    elif neg > 0 and pos > 0:
         return "mixed"
     else:
         return "neutral"
@@ -95,9 +95,10 @@ def detect_intensity_modifiers(text):
     return score
 
 
-def extract_intensity(pos, neg, text=""):
-    total = pos + neg + detect_intensity_modifiers(text)
-    return min(total / 5, 1.0)
+def extract_intensity(pos, neg, text="", word_count=1):
+    base_intensity = (pos + neg) / max(1, word_count)
+    modifier = detect_intensity_modifiers(text)
+    return min(1.0, base_intensity + modifier)
 
 
 def extract_themes(words):
@@ -143,7 +144,7 @@ def chat(payload: Message):
 
     pos, neg = extract_sentiment(words)
     tone = extract_tone(pos, neg)
-    intensity = extract_intensity(pos, neg, payload.message)
+    intensity = extract_intensity(pos, neg, payload.message, len(words))
     themes = extract_themes(words)
     pos_points, neg_points = extract_points(words)
 
