@@ -75,9 +75,28 @@ def extract_tone(pos, neg):
     else:
         return "neutral"
 
+def detect_intensity_modifiers(text):
+    score = 0
 
-def extract_intensity(pos, neg):
-    total = pos + neg
+    words = text.split()
+
+    # ALL CAPS words
+    if any(word.isupper() and len(word) > 2 for word in words):
+        score += 1.5
+
+    # Repeated letters (e.g. sooo, noooo)
+    if any(len(set(word)) < len(word) / 2 for word in words if len(word) > 2):
+        score += 1.0
+
+    # Strong punctuation
+    if "!" in text:
+        score += 0.5
+
+    return score
+
+
+def extract_intensity(pos, neg, text=""):
+    total = pos + neg + detect_intensity_modifiers(text)
     return min(total / 5, 1.0)
 
 
@@ -124,7 +143,7 @@ def chat(payload: Message):
 
     pos, neg = extract_sentiment(words)
     tone = extract_tone(pos, neg)
-    intensity = extract_intensity(pos, neg)
+    intensity = extract_intensity(pos, neg, payload.message)
     themes = extract_themes(words)
     pos_points, neg_points = extract_points(words)
 
