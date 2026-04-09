@@ -56,11 +56,11 @@ export default function Home() {
 
 emotion: ${data.emotion}
 intensity: ${data.intensity}
-themes: ${data.themes?.join(", ")}
+themes: ${data.themes?.join(", ")}${data.debug ? `
 
-pos: ${data.debug?.pos_score}
-neg: ${data.debug?.neg_score}
-words: ${data.debug?.word_count}`,  
+pos: ${data.debug.pos_score}
+neg: ${data.debug.neg_score}
+words: ${data.debug.word_count}` : ""}`,
         },
       ]);
     } catch (error) {

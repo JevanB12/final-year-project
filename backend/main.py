@@ -208,5 +208,10 @@ def chat(payload: Message):
         "intensity": intensity,
         "themes": themes,
         "positive_points": pos_points,
-        "negative_points": neg_points
+        "negative_points": neg_points,
+        "debug": {
+            "pos_score": pos,
+            "neg_score": neg,
+            "word_count": len(tokenize(text))
+        }
     }
