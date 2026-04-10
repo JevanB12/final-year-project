@@ -19,25 +19,27 @@ def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> 
     elif intensity > 0.4:
         base += " There's a bit going on in there."
 
-    if "sleep" in themes and tone in {"negative", "mixed"}:
+    if "sleep_rest" in themes and tone in {"negative", "mixed"}:
         base += " The tiredness stands out."
-    elif "work" in themes and tone in {"negative", "mixed"}:
+    elif "work_study_routine" in themes and tone in {"negative", "mixed"}:
         base += " The work side seems to be weighing on you a bit."
-    elif "recovery" in themes and tone in {"negative", "mixed"}:
+    elif "daily_structure" in themes and tone in {"negative", "mixed"}:
         base += " It also sounds like you haven't had much room to reset."
 
     return base
 
 
 def generate_thread_bridge(selected_thread: Optional[str]) -> str:
-    if selected_thread == "sleep":
+    if selected_thread == "sleep_rest":
         return "The part I'd focus on first is your energy / sleep side."
-    if selected_thread == "work":
+    if selected_thread == "work_study_routine":
         return "The part I'd focus on first is the workload side."
-    if selected_thread == "recovery":
+    if selected_thread == "daily_structure":
         return "The part I'd focus on first is whether you've had any space to recover."
-    if selected_thread == "movement":
+    if selected_thread == "physical_activity":
         return "The part I'd focus on first is how movement is affecting your energy."
+    if selected_thread == "meals_regularity":
+        return "The part I'd focus on first is whether you've been eating regularly."
     if selected_thread == "social":
         return "The part I'd focus on first is how the social side felt for you."
     return "The part I'd focus on first is what feels most active in this right now."

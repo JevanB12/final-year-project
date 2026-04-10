@@ -1,165 +1,152 @@
 from typing import Dict, List
 
-from lexicons import (
-    negative_phrases,
-    negative_words,
-    ongoing_cues,
-    present_cues,
-    positive_phrases,
-    positive_words,
-    themes_map,
-    urgent_phrases,
-)
+from lexicons import ongoing_cues, present_cues, thread_to_future_lane
 
 
-def _theme_hits(text: str, theme: str) -> List[str]:
-    hits = []
-    for keyword in themes_map.get(theme, []):
-        if " " in keyword:
-            if keyword in text:
-                hits.append(keyword)
-        else:
-            if keyword in text.split():
-                hits.append(keyword)
-    return hits
+NON_ACTIONABLE_THEMES = {"social"}
+
+FATIGUE_WORDS = {"tired", "exhausted", "drained", "worn", "fatigue"}
+WORK_IMPACT_PHRASES = {
+    "hard to study",
+    "hard to focus",
+    "hard to get things done",
+    "struggling to study",
+    "struggling to focus",
+    "can't get things done",
+    "cant get things done",
+    "making it hard to study",
+    "making it hard to focus",
+    "making it hard to get things done",
+}
+ROUTINE_PRESSURE_PHRASES = {
+    "all over the place",
+    "one thing after another",
+    "nonstop",
+    "packed",
+    "busy",
+    "no time",
+    "no free time",
+}
 
 
-def _theme_negative_hits(text: str) -> List[str]:
-    hits = []
-    words = text.split()
-
-    for word in words:
-        if word in negative_words and word not in hits:
-            hits.append(word)
-
-    for phrase in negative_phrases:
-        if phrase in text and phrase not in hits:
-            hits.append(phrase)
-
-    return hits
+def _count_present_cues(text: str) -> float:
+    score = 0.0
+    for cue in present_cues:
+        if cue in text:
+            score += 0.4
+    return score
 
 
-def _theme_positive_hits(text: str) -> List[str]:
-    hits = []
-    words = text.split()
-
-    for word in words:
-        if word in positive_words and word not in hits:
-            hits.append(word)
-
-    for phrase in positive_phrases:
-        if phrase in text and phrase not in hits:
-            hits.append(phrase)
-
-    return hits
+def _count_ongoing_cues(text: str) -> float:
+    score = 0.0
+    for cue in ongoing_cues:
+        if cue in text:
+            score += 0.5
+    return score
 
 
-def build_thread_evidence(text: str, themes: List[str]) -> Dict[str, dict]:
+def _has_any_phrase(text: str, phrases: set[str]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
+def build_thread_evidence(text: str, themes: List[str], positive_points: List[str], negative_points: List[str]) -> Dict[str, dict]:
     evidence = {}
 
-    global_negative_hits = _theme_negative_hits(text)
-    global_positive_hits = _theme_positive_hits(text)
-
     for theme in themes:
-        theme_hits = _theme_hits(text, theme)
+        if theme in NON_ACTIONABLE_THEMES:
+            continue
 
-        ongoing_score = 0.0
-        present_score = 0.0
-        urgency_score = 0.0
+        base_score = 1.0
+        ongoing_score = _count_ongoing_cues(text)
+        present_score = _count_present_cues(text)
         burden_score = 0.0
         resolved_penalty = 0.0
+        special_boost = 0.0
 
-        for cue in ongoing_cues:
-            if cue in text:
-                ongoing_score += 0.5
+        # Positive-only physical activity should not steal focus
+        if theme == "physical_activity":
+            if any(p in positive_points for p in {"good", "great", "good session", "felt good"}):
+                resolved_penalty += 1.2
 
-        for cue in present_cues:
-            if cue in text:
-                present_score += 0.5
+        # Strong fatigue thread
+        if theme == "sleep_rest":
+            if any(word in text.split() for word in FATIGUE_WORDS):
+                burden_score += 1.5
+            if "not enough sleep" in text or "not enough rest" in text:
+                burden_score += 1.5
+            if _has_any_phrase(text, WORK_IMPACT_PHRASES):
+                # Main fix: tiredness causing difficulty should lean sleep/rest
+                special_boost += 2.0
 
-        for phrase, weight in urgent_phrases.items():
-            if phrase in text:
-                urgency_score += weight
+        # Work/study thread exists, but should lose to the root cause in fatigue-causing-work cases
+        if theme == "work_study_routine":
+            if any(word in text.split() for word in {"study", "work", "deadline", "assignment", "exam"}):
+                burden_score += 1.0
+            if _has_any_phrase(text, WORK_IMPACT_PHRASES):
+                burden_score += 1.0
+            if any(word in negative_points for word in {"stressed", "overwhelmed", "frustrated", "behind", "pressure"}):
+                burden_score += 1.0
+            if any(word in text.split() for word in FATIGUE_WORDS) and _has_any_phrase(text, WORK_IMPACT_PHRASES):
+                # Small score only; work is impacted but not the main cause
+                special_boost += 0.4
 
-        if theme in {"sleep", "recovery"}:
-            for hit in global_negative_hits:
-                if hit in {"tired", "exhausted", "drained", "worn", "rough", "out of it"}:
-                    burden_score += 1.0
+        # Daily structure should pick up busy/nonstop/routine issues
+        if theme == "daily_structure":
+            if _has_any_phrase(text, ROUTINE_PRESSURE_PHRASES):
+                burden_score += 1.2
+            if "routine" in text or "schedule" in text or "consistent" in text:
+                burden_score += 0.8
 
-        if theme == "work":
-            for hit in global_negative_hits:
-                if hit in {
-                    "stressed",
-                    "stress",
-                    "overwhelmed",
-                    "frustrated",
-                    "behind",
-                    "pressure",
-                    "too many deadlines",
-                    "cant keep up",
-                    "can't keep up",
-                    "falling behind",
-                    "hard to manage",
-                    "hard to handle",
-                }:
-                    burden_score += 1.0
+        # Meals
+        if theme == "meals_regularity":
+            if any(word in text.split() for word in {"meal", "meals", "eat", "eating", "breakfast", "lunch", "dinner", "hungry"}):
+                burden_score += 1.0
+            if "not eating enough" in text or "not enough food" in text:
+                burden_score += 1.2
 
-        if theme == "movement":
-            for hit in global_positive_hits:
-                if hit in {"good", "great", "good session", "felt good"}:
-                    resolved_penalty += 1.0
+        # Activity
+        if theme == "physical_activity":
+            if any(word in text.split() for word in {"walk", "run", "gym", "exercise", "training", "sports"}):
+                burden_score += 0.6
 
-        if theme == "social":
-            for hit in global_positive_hits:
-                if hit in {"good", "nice", "fun", "enjoyed", "had fun"}:
-                    resolved_penalty += 1.0
-
-        base_score = 1.0 if theme_hits else 0.0
-
-        if theme in {"movement", "social"} and burden_score == 0 and resolved_penalty > 0:
-            resolved_penalty += 1.0
+        score = base_score + ongoing_score + present_score + burden_score + special_boost - resolved_penalty
 
         evidence[theme] = {
-            "hits": theme_hits,
-            "negative_hits": global_negative_hits,
-            "positive_hits": global_positive_hits,
+            "base_score": round(base_score, 2),
             "ongoing_score": round(ongoing_score, 2),
             "present_score": round(present_score, 2),
-            "urgency_score": round(urgency_score, 2),
             "burden_score": round(burden_score, 2),
+            "special_boost": round(special_boost, 2),
             "resolved_penalty": round(resolved_penalty, 2),
-            "base_score": round(base_score, 2),
+            "future_lane": thread_to_future_lane.get(theme),
         }
 
     return evidence
 
 
-def score_threads(text: str, themes: List[str]) -> Dict[str, float]:
-    evidence = build_thread_evidence(text, themes)
-    scores = {}
-
-    for theme, info in evidence.items():
-        score = (
+def score_threads(text: str, themes: List[str], positive_points: List[str], negative_points: List[str]) -> Dict[str, float]:
+    evidence = build_thread_evidence(text, themes, positive_points, negative_points)
+    return {
+        theme: round(
             info["base_score"]
             + info["ongoing_score"]
             + info["present_score"]
-            + info["urgency_score"]
             + info["burden_score"]
-            - info["resolved_penalty"]
+            + info["special_boost"]
+            - info["resolved_penalty"],
+            2,
         )
-        scores[theme] = round(score, 2)
+        for theme, info in evidence.items()
+    }
 
-    return scores
 
-
-def select_thread(scores: Dict[str, float], themes: List[str]) -> str | None:
+def select_thread(scores: Dict[str, float]) -> str | None:
     if not scores:
-        return themes[0] if themes else None
+        return None
+    return max(scores, key=scores.get)
 
-    ranked = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    best_theme, best_score = ranked[0]
 
-    if best_score <= 0 and themes:
-        return themes[0]
-
-    return best_theme
+def get_future_lane(selected_thread: str | None) -> str | None:
+    if not selected_thread:
+        return None
+    return thread_to_future_lane.get(selected_thread)

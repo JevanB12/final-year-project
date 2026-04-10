@@ -7,6 +7,11 @@ type ChatResponse = {
   emotion: string;
   intensity: number;
   themes: string[];
+  positive_points: string[];
+  negative_points: string[];
+  selected_thread: string | null;
+  future_lane: string | null;
+  thread_scores?: Record<string, number>;
   debug: {
     pos_score: number;
     neg_score: number;
@@ -17,6 +22,7 @@ type ChatResponse = {
 type Message = {
   sender: "user" | "assistant";
   text: string;
+  meta?: string;
 };
 
 export default function Home() {
@@ -48,19 +54,25 @@ export default function Home() {
 
       const data: ChatResponse = await response.json();
 
+      const meta = `emotion: ${data.emotion}
+intensity: ${data.intensity.toFixed(2)}
+themes: ${data.themes?.join(", ") || "none"}
+selected_thread: ${data.selected_thread || "none"}
+future_lane: ${data.future_lane || "none"}
+positive_points: ${data.positive_points?.join(", ") || "none"}
+negative_points: ${data.negative_points?.join(", ") || "none"}
+thread_scores: ${data.thread_scores ? JSON.stringify(data.thread_scores) : "{}"}
+
+pos: ${data.debug?.pos_score ?? 0}
+neg: ${data.debug?.neg_score ?? 0}
+words: ${data.debug?.word_count ?? 0}`;
+
       setMessages((prev) => [
         ...prev,
         {
           sender: "assistant",
-          text: `${data.reply}
-
-emotion: ${data.emotion}
-intensity: ${data.intensity}
-themes: ${data.themes?.join(", ")}${data.debug ? `
-
-pos: ${data.debug.pos_score}
-neg: ${data.debug.neg_score}
-words: ${data.debug.word_count}` : ""}`,
+          text: data.reply,
+          meta,
         },
       ]);
     } catch (error) {
@@ -87,15 +99,22 @@ words: ${data.debug.word_count}` : ""}`,
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
           <div className="space-y-3">
             {messages.map((msg, index) => (
-              <div
-                key={index}
-                className={`p-3 rounded-xl max-w-[75%] ${
-                  msg.sender === "user"
-                    ? "bg-blue-500 text-white ml-auto"
-                    : "bg-gray-200 text-black mr-auto whitespace-pre-line"
-                }`}
-              >
-                {msg.text}
+              <div key={index} className="space-y-1">
+                <div
+                  className={`p-3 rounded-xl max-w-[75%] ${
+                    msg.sender === "user"
+                      ? "bg-blue-500 text-white ml-auto"
+                      : "bg-gray-200 text-black mr-auto whitespace-pre-line"
+                  }`}
+                >
+                  {msg.text}
+                </div>
+
+                {msg.sender === "assistant" && msg.meta && (
+                  <div className="mr-auto max-w-[75%] rounded-lg bg-black text-green-400 text-xs p-3 whitespace-pre-wrap">
+                    {msg.meta}
+                  </div>
+                )}
               </div>
             ))}
           </div>

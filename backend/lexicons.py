@@ -10,6 +10,8 @@ positive_words = {
     "relaxed": 2,
     "enjoyed": 2,
     "glad": 2,
+    "well": 1,
+    "alright": 1,
 }
 
 negative_words = {
@@ -17,7 +19,7 @@ negative_words = {
     "stress": 3,
     "overwhelmed": 4,
     "anxious": 3,
-    "tired": 2,
+    "tired": 3,
     "exhausted": 4,
     "drained": 3,
     "frustrated": 3,
@@ -32,6 +34,7 @@ negative_words = {
     "worried": 2,
     "worn": 2,
     "burnt": 3,
+    "busy": 1,
 }
 
 intensifiers = {
@@ -42,36 +45,90 @@ intensifiers = {
     "quite": 1.2,
 }
 
+# These are detection themes, not all of them have to become suggestion lanes directly.
 themes_map = {
-    "work": [
+    "work_study_routine": [
         "work",
         "study",
         "deadline",
         "deadlines",
         "assignment",
+        "assignments",
         "exam",
         "revision",
         "job",
         "shift",
         "lecture",
+        "lectures",
+        "coursework",
+        "uni",
+        "university",
+        "school",
+        "college",
+        "focus",
+        "productive",
+        "productivity",
     ],
-    "sleep": [
+    "sleep_rest": [
         "sleep",
         "slept",
         "rest",
         "bed",
         "bedtime",
         "nap",
+        "naps",
         "morning",
-        "tonight",
+        "tired",
+        "exhausted",
+        "drained",
+        "worn",
+        "fatigue",
+        "rested",
     ],
-    "movement": [
+    "physical_activity": [
         "gym",
         "walk",
+        "walked",
         "run",
+        "ran",
         "workout",
         "exercise",
         "training",
+        "sport",
+        "sports",
+        "football",
+        "basketball",
+    ],
+    "meals_regularity": [
+        "meal",
+        "meals",
+        "eat",
+        "eating",
+        "ate",
+        "breakfast",
+        "lunch",
+        "dinner",
+        "food",
+        "snack",
+        "snacks",
+        "hungry",
+    ],
+    "daily_structure": [
+        "routine",
+        "schedule",
+        "consistent",
+        "consistency",
+        "packed",
+        "nonstop",
+        "busy",
+        "break",
+        "breaks",
+        "pause",
+        "space",
+        "time",
+        "rushed",
+        "all over the place",
+        "one thing after another",
     ],
     "social": [
         "friend",
@@ -80,22 +137,8 @@ themes_map = {
         "social",
         "people",
         "met",
-    ],
-    "recovery": [
-        "break",
-        "rest",
-        "breathe",
-        "recover",
-        "pause",
-        "reset",
-        "free time",
-        "time to myself",
-        "drained",
-        "draining",
-        "tired",
-        "exhausted",
-        "low energy",
-        "burnt out",
+        "going out",
+        "out",
     ],
 }
 
@@ -104,8 +147,8 @@ positive_phrases = {
     "went well": 2,
     "pretty good": 2,
     "had fun": 2,
-    "got stuff done": 2,
     "good session": 2,
+    "going well": 2,
 }
 
 negative_phrases = {
@@ -114,7 +157,6 @@ negative_phrases = {
     "a lot": 1,
     "no time": 3,
     "no free time": 4,
-    "time to myself": 2,
     "cant keep up": 4,
     "can't keep up": 4,
     "falling behind": 3,
@@ -128,12 +170,13 @@ negative_phrases = {
     "out of my depth": 4,
     "hard to manage": 3,
     "hard to handle": 3,
-    "idk how": 2,
-    "dont know how": 2,
-    "don't know how": 2,
-    "need to breathe": 3,
     "need a break": 3,
     "out of it": 2,
+    "hard to focus": 3,
+    "hard to study": 3,
+    "hard to get things done": 3,
+    "finding it hard to study": 3,
+    "finding it hard to focus": 3,
 }
 
 support_cues = {
@@ -157,6 +200,8 @@ lack_phrases = {
     "not enough sleep": 3,
     "not enough rest": 3,
     "not enough time": 3,
+    "not enough food": 2,
+    "not eating enough": 2,
 }
 
 ongoing_cues = {
@@ -170,18 +215,7 @@ ongoing_cues = {
     "building",
     "been",
     "every",
-}
-
-urgent_phrases = {
-    "need to fix": 2.5,
-    "need to sort this out": 3.0,
-    "cant keep doing this": 3.0,
-    "can't keep doing this": 3.0,
-    "need this sorted": 2.5,
-    "need better sleep tonight": 3.0,
-    "need to get this done": 2.0,
-    "need to handle this": 2.0,
-    "really need": 1.5,
+    "consistently",
 }
 
 present_cues = {
@@ -193,25 +227,35 @@ present_cues = {
     "at the moment",
 }
 
+# We are NOT using these as full suggestions yet.
+# They simply show the future lane the conversation would head toward.
+thread_to_future_lane = {
+    "sleep_rest": "sleep_rest",
+    "work_study_routine": "work_study_routine",
+    "physical_activity": "physical_activity",
+    "meals_regularity": "meals_regularity",
+    "daily_structure": "daily_structure",
+}
+
 thread_questions = {
-    "sleep": [
-        "Was that mostly just tonight, or had the tiredness been building through the day too?",
-        "Do you think this is more about today being long, or sleep being a bit off lately?",
+    "sleep_rest": [
+        "Has your rest been a bit off lately, or was this more just today?",
+        "Do you feel like you've been getting enough rest lately?",
     ],
-    "work": [
-        "Was it mainly the amount you had on, or more that it was hard to get going?",
-        "Did the work feel heavy all day, or was it more frustrating not getting through as much as you wanted?",
+    "work_study_routine": [
+        "Has work or study just been especially heavy at the moment?",
+        "Do you feel like you've actually had enough time to focus on work or study properly?",
     ],
-    "recovery": [
-        "Did you get much chance to slow down between things today?",
-        "Was it one of those days where everything just rolled into the next thing?",
+    "physical_activity": [
+        "Have you been moving much lately, or not really?",
+        "Has exercise been helping your energy, or taking a bit out of you?",
     ],
-    "movement": [
-        "Did being active help your energy today, or did it take a lot out of you?",
-        "Has movement been helping lately, or was today a bit different?",
+    "meals_regularity": [
+        "Have you been eating regularly lately, or has that been a bit off too?",
+        "On busy days like this, do meals sometimes end up getting skipped or pushed back?",
     ],
-    "social": [
-        "Did seeing people feel like a boost today, or were you still feeling pretty drained underneath it?",
-        "Did that social time help reset things at all?",
+    "daily_structure": [
+        "Has your routine been a bit all over the place lately?",
+        "Has it been one of those days where everything just rolled into the next thing?",
     ],
 }

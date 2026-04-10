@@ -12,7 +12,7 @@ from extractors import (
     tokenize,
 )
 from responses import generate_iteration2_reply
-from thread_selector import build_thread_evidence, score_threads, select_thread
+from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
 
 app = FastAPI()
 
@@ -36,13 +36,15 @@ def chat(payload: Message):
 
     pos, neg = extract_sentiment(text)
     tone = extract_tone(pos, neg)
-    intensity = extract_intensity(pos, neg, raw_text, len(tokenize(text)))
+    word_count = len(tokenize(text))
+    intensity = extract_intensity(pos, neg, raw_text, word_count)
     themes = extract_themes(text)
-    pos_points, neg_points = extract_points(text)
+    positive_points, negative_points = extract_points(text)
 
-    thread_evidence = build_thread_evidence(text, themes)
-    thread_scores = score_threads(text, themes)
-    selected_thread = select_thread(thread_scores, themes)
+    thread_scores = score_threads(text, themes, positive_points, negative_points)
+    selected_thread = select_thread(thread_scores)
+    future_lane = get_future_lane(selected_thread)
+    thread_evidence = build_thread_evidence(text, themes, positive_points, negative_points)
 
     reply = generate_iteration2_reply(
         tone=tone,
@@ -56,15 +58,16 @@ def chat(payload: Message):
         "emotion": tone,
         "intensity": intensity,
         "themes": themes,
-        "positive_points": pos_points,
-        "negative_points": neg_points,
+        "positive_points": positive_points,
+        "negative_points": negative_points,
         "selected_thread": selected_thread,
+        "future_lane": future_lane,
         "thread_scores": thread_scores,
         "thread_evidence": thread_evidence,
         "debug": {
             "pos_score": pos,
             "neg_score": neg,
-            "word_count": len(tokenize(text)),
+            "word_count": word_count,
         },
     }
 
