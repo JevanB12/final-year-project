@@ -46,7 +46,9 @@ def chat(payload: Message):
     future_lane = get_future_lane(selected_thread)
     thread_evidence = build_thread_evidence(text, themes, positive_points, negative_points)
 
-    if tone == "neutral" and intensity < 0.2:
+    _fatigue_words = {"tired", "exhausted", "drained", "no energy"}
+    _has_fatigue = any(word in text for word in _fatigue_words)
+    if tone == "neutral" and intensity < 0.2 and not negative_points and not _has_fatigue:
         selected_thread = None
         future_lane = None
         thread_scores = {}
