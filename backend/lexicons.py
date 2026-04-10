@@ -249,23 +249,23 @@ thread_to_future_lane = {
 
 thread_questions = {
     "sleep_rest": [
-        "Has your rest been a bit off lately, or was this more just today?",
-        "Do you feel like you've been getting enough rest lately?",
+        "What's the rest side of things been like lately?",
+        "How has your energy been feeling in general?",
     ],
     "work_study_routine": [
-        "Has work or study just been especially heavy at the moment?",
-        "Do you feel like you've actually had enough time to focus on work or study properly?",
+        "Tell me a bit more about what you've had on.",
+        "What about that side of things has been feeling most difficult?",
     ],
     "physical_activity": [
-        "Have you been moving much lately, or not really?",
-        "Has exercise been helping your energy, or taking a bit out of you?",
+        "How has movement been fitting into your days lately?",
+        "Has staying active felt easy or more like an effort recently?",
     ],
     "meals_regularity": [
-        "Have you been eating regularly lately, or has that been a bit off too?",
-        "On busy days like this, do meals sometimes end up getting skipped or pushed back?",
+        "How have meals been going lately?",
+        "Has eating regularly been easy to keep up, or has that slipped a bit?",
     ],
     "daily_structure": [
-        "Has your routine been a bit all over the place lately?",
-        "Has it been one of those days where everything just rolled into the next thing?",
+        "What's your day-to-day been feeling like recently?",
+        "Has there been much breathing room in your days, or has it felt pretty packed?",
     ],
 }
