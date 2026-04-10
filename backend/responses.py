@@ -22,18 +22,25 @@ def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> 
     if "sleep_rest" in themes and tone in {"negative", "mixed"}:
         base += " The tiredness stands out."
     elif "work_study_routine" in themes and tone in {"negative", "mixed"}:
-        base += " The work side seems to be weighing on you a bit."
+        base += " What you've had on seems to be weighing on you a bit."
     elif "daily_structure" in themes and tone in {"negative", "mixed"}:
         base += " It also sounds like you haven't had much room to reset."
 
     return base
 
 
-def generate_thread_bridge(selected_thread: Optional[str]) -> str:
+def generate_thread_bridge(selected_thread: Optional[str], text: str = "") -> str:
     if selected_thread == "sleep_rest":
         return "The part I'd focus on first is your energy / sleep side."
     if selected_thread == "work_study_routine":
-        return "The part I'd focus on first is the workload side."
+        words = set(text.split())
+        if "study" in words and "work" not in words:
+            label = "the study side"
+        elif "work" in words and "study" not in words:
+            label = "the work side"
+        else:
+            label = "what you've had on"
+        return f"The part I'd focus on first is {label}."
     if selected_thread == "daily_structure":
         return "The part I'd focus on first is whether you've had any space to recover."
     if selected_thread == "physical_activity":
@@ -63,10 +70,11 @@ def generate_iteration2_reply(
     themes: List[str],
     intensity: float,
     selected_thread: Optional[str],
+    text: str = "",
 ) -> str:
     if selected_thread is None:
         return random.choice(NEUTRAL_RESPONSES)
     acknowledgement = generate_acknowledgement(tone, themes, intensity)
-    bridge = generate_thread_bridge(selected_thread)
+    bridge = generate_thread_bridge(selected_thread, text)
     question = generate_thread_question(selected_thread)
     return f"{acknowledgement} {bridge} {question}"

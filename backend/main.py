@@ -59,6 +59,7 @@ def chat(payload: Message):
         themes=themes,
         intensity=intensity,
         selected_thread=selected_thread,
+        text=text,
     )
 
     return {
