@@ -52,12 +52,20 @@ def generate_thread_question(selected_thread: Optional[str]) -> str:
     return random.choice(thread_questions[selected_thread])
 
 
+NEUTRAL_RESPONSES = [
+    "Got you — sounds like a pretty steady day. Did it feel like a good balance overall?",
+    "Sounds like a fairly normal day. Did everything feel alright energy-wise, or was anything slightly off?",
+]
+
+
 def generate_iteration2_reply(
     tone: str,
     themes: List[str],
     intensity: float,
     selected_thread: Optional[str],
 ) -> str:
+    if selected_thread is None:
+        return random.choice(NEUTRAL_RESPONSES)
     acknowledgement = generate_acknowledgement(tone, themes, intensity)
     bridge = generate_thread_bridge(selected_thread)
     question = generate_thread_question(selected_thread)

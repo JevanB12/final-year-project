@@ -46,6 +46,12 @@ def chat(payload: Message):
     future_lane = get_future_lane(selected_thread)
     thread_evidence = build_thread_evidence(text, themes, positive_points, negative_points)
 
+    if tone == "neutral" and intensity < 0.2:
+        selected_thread = None
+        future_lane = None
+        thread_scores = {}
+        thread_evidence = {}
+
     reply = generate_iteration2_reply(
         tone=tone,
         themes=themes,
