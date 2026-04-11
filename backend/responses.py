@@ -22,7 +22,7 @@ def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> 
     if "sleep_rest" in themes and tone in {"negative", "mixed"}:
         base += " The tiredness stands out."
     elif "work_study_routine" in themes and tone in {"negative", "mixed"}:
-        base += " What you've had on seems to be weighing on you a bit."
+        base += " The workload seems to be weighing on you a bit."
     elif "daily_structure" in themes and tone in {"negative", "mixed"}:
         base += " It also sounds like you haven't had much room to reset."
 
@@ -33,14 +33,7 @@ def generate_thread_bridge(selected_thread: Optional[str], text: str = "") -> st
     if selected_thread == "sleep_rest":
         return "The part I'd focus on first is your energy / sleep side."
     if selected_thread == "work_study_routine":
-        words = set(text.split())
-        if "study" in words and "work" not in words:
-            label = "the study side"
-        elif "work" in words and "study" not in words:
-            label = "the work side"
-        else:
-            label = "what you've had on"
-        return f"The part I'd focus on first is {label}."
+        return "The part I'd focus on first is the workload side."
     if selected_thread == "daily_structure":
         return "The part I'd focus on first is whether you've had any space to recover."
     if selected_thread == "physical_activity":

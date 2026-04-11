@@ -254,7 +254,7 @@ thread_questions = {
     ],
     "work_study_routine": [
         "Tell me a bit more about what you've had on.",
-        "What about that side of things has been feeling most difficult?",
+        "What about the workload has been feeling most difficult?",
     ],
     "physical_activity": [
         "How has movement been fitting into your days lately?",
