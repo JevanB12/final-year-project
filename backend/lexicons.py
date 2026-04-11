@@ -187,6 +187,18 @@ negative_phrases = {
     "hard to get things done": 3,
     "finding it hard to study": 3,
     "finding it hard to focus": 3,
+    "couldn't get myself to start": 3,
+    "couldnt get myself to start": 3,
+    "couldn't start": 2,
+    "couldnt start": 2,
+    "couldn't focus": 3,
+    "couldnt focus": 3,
+    "didn't do much": 2,
+    "didnt do much": 2,
+    "meant to do work": 2,
+    "feel guilty": 2,
+    "feel kinda guilty": 3,
+    "guilty about it": 2,
 }
 
 support_cues = {

@@ -28,6 +28,21 @@ ROUTINE_PRESSURE_PHRASES = {
     "no free time",
 }
 
+AVOIDANCE_PHRASES = {
+    "couldn't get myself to start",
+    "couldnt get myself to start",
+    "couldn't start",
+    "couldnt start",
+    "couldn't focus",
+    "couldnt focus",
+    "didn't do much",
+    "didnt do much",
+    "meant to do work",
+    "feel guilty",
+    "feel kinda guilty",
+    "guilty about it",
+}
+
 
 def _count_present_cues(text: str) -> float:
     score = 0.0
@@ -86,6 +101,8 @@ def build_thread_evidence(text: str, themes: List[str], positive_points: List[st
                 burden_score += 1.0
             if any(word in negative_points for word in {"stressed", "overwhelmed", "frustrated", "behind", "pressure"}):
                 burden_score += 1.0
+            if _has_any_phrase(text, AVOIDANCE_PHRASES):
+                burden_score += 1.5
             if any(word in text.split() for word in FATIGUE_WORDS) and _has_any_phrase(text, WORK_IMPACT_PHRASES):
                 # Small score only; work is impacted but not the main cause
                 special_boost += 0.4
