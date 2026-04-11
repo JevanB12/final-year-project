@@ -60,6 +60,7 @@ def chat(payload: Message):
         intensity=intensity,
         selected_thread=selected_thread,
         text=text,
+        negative_points=negative_points,
     )
 
     return {

@@ -29,6 +29,23 @@ def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> 
     return base
 
 
+POSITIVE_THEME_REFLECTIONS = {
+    "work_study_routine": "things have been going well on the work and study front",
+    "sleep_rest": "you've been resting well",
+    "physical_activity": "you've been keeping active",
+    "meals_regularity": "you've been keeping on top of meals",
+    "daily_structure": "you've had a good routine going",
+}
+
+
+def generate_positive_reflection(themes: List[str]) -> str:
+    for theme in themes:
+        if theme in POSITIVE_THEME_REFLECTIONS:
+            reflection = POSITIVE_THEME_REFLECTIONS[theme]
+            return f"That's good to hear — sounds like {reflection}. What do you think has been helping most?"
+    return "That's good to hear — sounds like things have been going well. What do you think has been helping most?"
+
+
 def generate_thread_bridge(selected_thread: Optional[str], text: str = "") -> str:
     if selected_thread == "sleep_rest":
         return "The part I'd focus on first is your energy / sleep side."
@@ -69,7 +86,10 @@ def generate_iteration2_reply(
     intensity: float,
     selected_thread: Optional[str],
     text: str = "",
+    negative_points: Optional[List[str]] = None,
 ) -> str:
+    if tone == "positive" and not negative_points:
+        return generate_positive_reflection(themes)
     if selected_thread is None:
         if tone == "negative":
             return random.choice(NEGATIVE_FALLBACK_RESPONSES)
