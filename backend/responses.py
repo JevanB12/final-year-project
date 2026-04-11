@@ -64,6 +64,11 @@ NEUTRAL_RESPONSES = [
     "Sounds like a fairly normal day. Did everything feel alright energy-wise, or was anything slightly off?",
 ]
 
+NEGATIVE_FALLBACK_RESPONSES = [
+    "Sounds like even though things were alright on the surface, something still feels a bit off underneath. Do you want to talk more about that?",
+    "It sounds like things haven't quite felt right, even if it's hard to pin down exactly why. What's been sitting with you most?",
+]
+
 
 def generate_iteration2_reply(
     tone: str,
@@ -73,6 +78,8 @@ def generate_iteration2_reply(
     text: str = "",
 ) -> str:
     if selected_thread is None:
+        if tone == "negative":
+            return random.choice(NEGATIVE_FALLBACK_RESPONSES)
         return random.choice(NEUTRAL_RESPONSES)
     acknowledgement = generate_acknowledgement(tone, themes, intensity)
     bridge = generate_thread_bridge(selected_thread, text)
