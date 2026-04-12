@@ -10,7 +10,8 @@ from extractors import (
     extract_tone,
     normalize_text,
     tokenize,
-)
+)                                           
+from hypothesis_reaction import classify_hypothesis_reaction
 from responses import generate_iteration2_reply
 from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
 
@@ -27,6 +28,11 @@ app.add_middleware(
 
 class Message(BaseModel):
     message: str
+
+
+class ReactionPayload(BaseModel):
+    reply: str
+    selected_thread: str
 
 
 @app.post("/chat")
@@ -80,4 +86,12 @@ def chat(payload: Message):
             "word_count": word_count,
         },
     }
+
+
+@app.post("/classify-reaction")
+def classify_reaction(payload: ReactionPayload):
+    return classify_hypothesis_reaction(
+        reply_text=payload.reply,
+        selected_thread=payload.selected_thread,
+    )
 
