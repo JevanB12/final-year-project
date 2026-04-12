@@ -1,7 +1,7 @@
 import random
 from typing import List, Optional
 
-from lexicons import thread_questions
+from lexicons import soft_clarification_questions, thread_questions
 
 
 def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> str:
@@ -48,18 +48,25 @@ def generate_positive_reflection(themes: List[str]) -> str:
 
 def generate_thread_bridge(selected_thread: Optional[str], text: str = "") -> str:
     if selected_thread == "sleep_rest":
-        return "The part I'd focus on first is your energy / sleep side."
+        return "To understand that a bit better,"
     if selected_thread == "work_study_routine":
-        return "The part I'd focus on first is the workload side."
+        return "To understand that a bit better,"
     if selected_thread == "daily_structure":
-        return "The part I'd focus on first is whether you've had any space to recover."
+        return "To understand that a bit better,"
     if selected_thread == "physical_activity":
-        return "The part I'd focus on first is how movement is affecting your energy."
+        return "To understand that a bit better,"
     if selected_thread == "meals_regularity":
-        return "The part I'd focus on first is whether you've been eating regularly."
+        return "To understand that a bit better,"
     if selected_thread == "social":
-        return "The part I'd focus on first is how the social side felt for you."
-    return "The part I'd focus on first is what feels most active in this right now."
+        return "To understand that a bit better,"
+    return "To understand that a bit better,"
+
+
+def generate_soft_clarification(selected_thread: Optional[str], analysis: Optional[dict] = None) -> str:
+    if not selected_thread or selected_thread not in soft_clarification_questions:
+        return "What feels like the biggest part of it right now?"
+
+    return random.choice(soft_clarification_questions[selected_thread])
 
 
 def generate_thread_question(selected_thread: Optional[str]) -> str:
@@ -96,5 +103,5 @@ def generate_iteration2_reply(
         return random.choice(NEUTRAL_RESPONSES)
     acknowledgement = generate_acknowledgement(tone, themes, intensity)
     bridge = generate_thread_bridge(selected_thread, text)
-    question = generate_thread_question(selected_thread)
+    question = generate_soft_clarification(selected_thread)
     return f"{acknowledgement} {bridge} {question}"
