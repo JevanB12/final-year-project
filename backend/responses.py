@@ -4,11 +4,25 @@ from typing import List, Optional
 from lexicons import general_soft_clarification_questions, soft_clarification_questions
 
 
-def generate_acknowledgement(tone: str, themes: List[str], intensity: float) -> str:
-    if tone == "positive":
-        base = "Sounds like there were some good parts to the day."
-    elif tone == "negative":
+STRONG_NEGATIVE_CUES = {
+    "no energy",
+    "cant do",
+    "can't do",
+    "cant do it",
+    "can't do it",
+    "struggling",
+    "slipping",
+    "falling behind",
+}
+
+
+def generate_acknowledgement(tone: str, themes: List[str], intensity: float, text: str = "") -> str:
+    has_strong_negative = any(cue in text for cue in STRONG_NEGATIVE_CUES)
+
+    if tone == "negative" or has_strong_negative:
         base = "That sounds like a pretty tough day."
+    elif tone == "positive":
+        base = "Sounds like there were some good parts to the day."
     elif tone == "mixed":
         base = "Sounds like the day had a bit of both."
     else:
@@ -88,7 +102,7 @@ def generate_iteration2_reply(
         if tone == "negative":
             return random.choice(NEGATIVE_FALLBACK_RESPONSES)
         return random.choice(NEUTRAL_RESPONSES)
-    acknowledgement = generate_acknowledgement(tone, themes, intensity)
+    acknowledgement = generate_acknowledgement(tone, themes, intensity, text)
     bridge = generate_thread_bridge(selected_thread, text)
     question = generate_soft_clarification(
         selected_thread,
