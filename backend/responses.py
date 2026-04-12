@@ -1,7 +1,7 @@
 import random
 from typing import List, Optional
 
-from lexicons import general_soft_clarification_questions, soft_clarification_questions
+from lexicons import soft_clarification_questions
 
 
 STRONG_NEGATIVE_CUES = {
@@ -65,14 +65,8 @@ def generate_thread_bridge(selected_thread: Optional[str], text: str = "") -> st
 
 
 def generate_soft_clarification(selected_thread: Optional[str], analysis: Optional[dict] = None) -> str:
-    if analysis:
-        tone = analysis.get("tone")
-        themes = analysis.get("themes", [])
-        if tone == "mixed" or len(themes) > 1:
-            return random.choice(general_soft_clarification_questions)
-
     if not selected_thread or selected_thread not in soft_clarification_questions:
-        return random.choice(general_soft_clarification_questions)
+        return "Do you think that's been part of what you're feeling?"
 
     return random.choice(soft_clarification_questions[selected_thread])
 
