@@ -284,29 +284,34 @@ thread_questions = {
 
 soft_clarification_questions = {
     "sleep_rest": [
-        "How's your sleep been lately?",
-        "Do you think sleep might be part of it?",
-        "Have you been feeling generally tired lately, or was today just a lot?",
+        "It sounds like sleep might be part of this — do you think that fits?",
+        "Do you think sleep has been a factor here?",
+        "Has sleep been affecting this at all lately?",
+        "It sounds like tiredness may be feeding into this a bit — do you think rest is part of it?",
     ],
     "work_study_routine": [
-        "Has work been heavier than usual lately?",
-        "Do you think it's more the amount you've had on?",
-        "Has it felt hard to keep up with everything recently?",
+        "It sounds like workload might be part of this — do you think that fits?",
+        "Has the amount you've had on been affecting things?",
+        "Do you think work pressure has been a factor here?",
+        "Could the amount you're juggling be part of what's making this harder?",
     ],
     "physical_activity": [
-        "Do you think all the activity has been taking a lot out of you?",
-        "How's your energy been around training lately?",
-        "Do you feel like recovery has been a bit off?",
+        "It sounds like recovery might be part of this — do you think that fits?",
+        "Do you think training load has been affecting you?",
+        "Has all the activity been taking a lot out of you lately?",
+        "Could recovery be part of why things feel harder right now?",
     ],
     "daily_structure": [
-        "Has everything felt a bit nonstop lately?",
-        "Do you feel like you've had much breathing room recently?",
-        "Has it been more one thing after another for you?",
+        "It sounds like having no breathing room might be part of this — do you think that fits?",
+        "Do you think everything being nonstop has been a factor?",
+        "Has having no downtime been affecting how you're feeling?",
+        "Could the pace of things be part of what's making this harder?",
     ],
     "meals_regularity": [
-        "How have meals been lately?",
-        "Do you think eating regularly has been part of it at all?",
-        "Has it been easy to keep meals steady recently?",
+        "It sounds like eating regularly might be part of this — do you think that fits?",
+        "Do you think meals have been affecting how you feel?",
+        "Has keeping meals steady been part of the issue?",
+        "Could regular eating patterns be part of what's making this harder?",
     ],
 }
 
