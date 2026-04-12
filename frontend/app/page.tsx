@@ -16,6 +16,11 @@ type ChatResponse = {
     pos_score: number;
     neg_score: number;
     word_count: number;
+    classification?: {
+      label?: string;
+      confidence?: number | string;
+      reason?: string;
+    };
   };
 };
 
@@ -54,6 +59,12 @@ export default function Home() {
 
       const data: ChatResponse = await response.json();
 
+      const classification = data.debug?.classification;
+      const classificationConfidence =
+        typeof classification?.confidence === "number"
+          ? classification.confidence.toFixed(2)
+          : classification?.confidence;
+
       const meta = `emotion: ${data.emotion}
 intensity: ${data.intensity.toFixed(2)}
 themes: ${data.themes?.join(", ") || "none"}
@@ -62,6 +73,12 @@ future_lane: ${data.future_lane || "none"}
 positive_points: ${data.positive_points?.join(", ") || "none"}
 negative_points: ${data.negative_points?.join(", ") || "none"}
 thread_scores: ${data.thread_scores ? JSON.stringify(data.thread_scores) : "{}"}
+
+${classification
+  ? `classification.label: ${classification.label || "none"}
+classification.confidence: ${classificationConfidence ?? "none"}
+classification.reason: ${classification.reason || "none"}`
+  : "classification: none"}
 
 pos: ${data.debug?.pos_score ?? 0}
 neg: ${data.debug?.neg_score ?? 0}
