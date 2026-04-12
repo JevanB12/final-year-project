@@ -284,23 +284,34 @@ thread_questions = {
 
 soft_clarification_questions = {
     "sleep_rest": [
-        "Was that mostly end-of-day tiredness, or had it been building up earlier too?",
-        "Do you think that's just tonight, or has sleep been a bit off lately?",
+        "How's your sleep been lately?",
+        "Do you think sleep might be part of it?",
+        "Have you been feeling generally tired lately, or was today just a lot?",
     ],
     "work_study_routine": [
-        "Was it mainly the amount you had on, or more that it was hard to get going?",
-        "Did the work feel heavy all day, or was it more frustrating not getting through as much as you wanted?",
+        "Has work been heavier than usual lately?",
+        "Do you think it's more the amount you've had on?",
+        "Has it felt hard to keep up with everything recently?",
     ],
     "physical_activity": [
-        "Did the gym help your energy, or did it take a lot out of you today?",
-        "Have you been moving enough generally, or was today more active than usual?",
+        "Do you think all the activity has been taking a lot out of you?",
+        "How's your energy been around training lately?",
+        "Do you feel like recovery has been a bit off?",
     ],
     "daily_structure": [
-        "Did you get much chance to slow down between things today?",
-        "Was it one of those days where everything just rolled into the next thing?",
+        "Has everything felt a bit nonstop lately?",
+        "Do you feel like you've had much breathing room recently?",
+        "Has it been more one thing after another for you?",
     ],
     "meals_regularity": [
-        "Have meals mostly been steady, or has it been hard to fit them in properly?",
-        "Has eating felt manageable this week, or has it been slipping when days get busy?",
+        "How have meals been lately?",
+        "Do you think eating regularly has been part of it at all?",
+        "Has it been easy to keep meals steady recently?",
     ],
 }
+
+general_soft_clarification_questions = [
+    "What feels like the biggest part of it to you?",
+    "Do you think it's one main thing, or just a mix of everything?",
+    "What do you think has been affecting you most recently?",
+]
