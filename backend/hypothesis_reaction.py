@@ -320,6 +320,8 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     confidence = _compute_confidence(primary, secondary, reaction)
 
     return {
+        "selected_thread": selected_thread or None,
+        "user_reply": reply_text,
         "reaction": reaction,
         "confidence": confidence,
         "redirected_thread": redirected_thread,
@@ -339,7 +341,5 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
             "found_known_thread_terms": found_terms,
             "found_unknown_redirect_cue": found_unknown_redirect_cue,
             "notes": notes,
-            "normalized_text": normalized,
-            "selected_thread": selected_thread,
         },
     }

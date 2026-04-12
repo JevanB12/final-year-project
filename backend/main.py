@@ -69,20 +69,6 @@ def chat(payload: Message):
         negative_points=negative_points,
     )
 
-    classification_reason_parts = []
-    if themes:
-        classification_reason_parts.append(f"themes: {', '.join(themes)}")
-    if negative_points:
-        classification_reason_parts.append(f"negative_points: {', '.join(negative_points)}")
-    elif positive_points:
-        classification_reason_parts.append(f"positive_points: {', '.join(positive_points)}")
-
-    classification = {
-        "label": tone,
-        "confidence": intensity,
-        "reason": "; ".join(classification_reason_parts) if classification_reason_parts else "no strong cues",
-    }
-
     return {
         "reply": reply,
         "emotion": tone,
@@ -98,15 +84,16 @@ def chat(payload: Message):
             "pos_score": pos,
             "neg_score": neg,
             "word_count": word_count,
-            "classification": classification,
         },
     }
 
 
 @app.post("/classify-reaction")
 def classify_reaction(payload: ReactionPayload):
-    return classify_hypothesis_reaction(
+    result = classify_hypothesis_reaction(
         reply_text=payload.reply,
         selected_thread=payload.selected_thread,
     )
+    print("Reaction classification:", result)
+    return result
 
