@@ -156,15 +156,20 @@ def normalize_reaction_text(text: str) -> str:
     return text
 
 
+def _contains_phrase(text: str, phrase: str) -> bool:
+    pattern = rf"(?<!\w){re.escape(phrase)}(?!\w)"
+    return re.search(pattern, text) is not None
+
+
 def _count_cue_hits(text: str, cues: set[str]) -> tuple[int, List[str]]:
-    matched = [cue for cue in cues if cue in text]
+    matched = [cue for cue in cues if _contains_phrase(text, cue)]
     return len(matched), matched
 
 
 def _find_terms_for_thread(text: str, thread: str) -> List[str]:
     found = []
     for term in THREAD_KEYWORDS.get(thread, set()):
-        if term in text:
+        if _contains_phrase(text, term):
             found.append(term)
     return sorted(found)
 
