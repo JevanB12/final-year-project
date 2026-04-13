@@ -1,3 +1,31 @@
+POSITIVE_STATE_CUES = {
+    "good",
+    "fine",
+    "okay",
+    "ok",
+    "alright",
+    "great",
+    "better",
+}
+def _selected_positive_state_score(text: str, selected_thread: str) -> tuple[int, List[str]]:
+    score = 0
+    matched = []
+    selected_terms = THREAD_KEYWORDS.get(selected_thread, set())
+
+    for term in selected_terms:
+        for cue in POSITIVE_STATE_CUES:
+            patterns = [
+                f"{term} has been {cue}",
+                f"{term} been {cue}",
+                f"{term} is {cue}",
+                f"my {term} has been {cue}",
+                f"my {term} is {cue}",
+            ]
+            for pattern in patterns:
+                if pattern in text:
+                    score += 2
+                    matched.append(pattern)
+    return score, sorted(set(matched))
 import re
 from typing import Dict, List, Optional
 
@@ -276,6 +304,7 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
             found_terms.append(f"{thread}:{term}")
 
     downplay_score, downplay_matches = _selected_downplay_score(normalized, selected_thread)
+    positive_state_score, positive_state_matches = _selected_positive_state_score(normalized, selected_thread)
     unsupported_text = extract_unsupported_redirect_text(normalized, selected_thread, found_threads)
     found_unknown_redirect_cue = unsupported_text is not None
 
@@ -286,6 +315,8 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
         redirect_score += 2
     if downplay_score > 0:
         redirect_score += 1
+
+    reject_score += positive_state_score
 
     notes: List[str] = []
 
@@ -325,26 +356,20 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     confidence = _compute_confidence(primary, secondary, reaction)
 
     return {
-        "selected_thread": selected_thread or None,
-        "user_reply": reply_text,
         "reaction": reaction,
-        "confidence": confidence,
         "redirected_thread": redirected_thread,
         "redirected_text": redirected_text,
         "redirect_supported": redirect_supported,
+        "confidence": _compute_confidence(
+            max(agree_score, reject_score, unsure_score, redirect_score),
+            min(agree_score, reject_score, unsure_score, redirect_score),
+            reaction,
+        ),
         "matched_signals": {
             "agree": sorted(set(agree_matches)),
-            "reject": sorted(set(reject_matches + downplay_matches)),
+            "reject": sorted(set(reject_matches + downplay_matches + positive_state_matches)),
             "redirect": sorted(set(redirect_cue_matches + found_terms)),
             "unsure": sorted(set(unsure_matches)),
         },
-        "debug": {
-            "agree_score": agree_score,
-            "reject_score": reject_score,
-            "redirect_score": redirect_score,
-            "unsure_score": unsure_score,
-            "found_known_thread_terms": found_terms,
-            "found_unknown_redirect_cue": found_unknown_redirect_cue,
-            "notes": notes,
-        },
+        "notes": notes,
     }
