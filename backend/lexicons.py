@@ -35,6 +35,9 @@ negative_words = {
     "worn": 2,
     "burnt": 3,
     "busy": 1,
+    "isolated": 3,
+    "lonely": 3,
+    "down": 2,
 }
 
 intensifiers = {
@@ -199,6 +202,11 @@ negative_phrases = {
     "feel guilty": 2,
     "feel kinda guilty": 3,
     "guilty about it": 2,
+    "no social life": 4,
+    "getting me down": 3,
+    "feel isolated": 3,
+    "feeling isolated": 3,
+    "been feeling isolated": 3,
 }
 
 support_cues = {
