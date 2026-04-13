@@ -1,3 +1,6 @@
+import re
+from typing import Dict, List, Optional
+
 POSITIVE_STATE_CUES = {
     "good",
     "fine",
@@ -26,9 +29,6 @@ def _selected_positive_state_score(text: str, selected_thread: str) -> tuple[int
                     score += 2
                     matched.append(pattern)
     return score, sorted(set(matched))
-import re
-from typing import Dict, List, Optional
-
 
 SUPPORTED_THREADS = {
     "sleep_rest",
