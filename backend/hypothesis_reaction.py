@@ -338,15 +338,15 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
             redirected_text = unsupported_text
             redirect_supported = False
             notes.append("User moved away from selected thread and pointed to an unsupported issue.")
+    elif reject_score > unsure_score and not has_redirect_target:
+        reaction = "reject"
+        notes.append("Rejection stronger than uncertainty.")
     elif agree_score > 0 and reject_score == 0 and unsure_score == 0:
         reaction = "agree"
         notes.append("Agreement cues with no rejection or uncertainty cues.")
-    elif reject_score > 0 and agree_score == 0 and not has_redirect_target:
-        reaction = "reject"
-        notes.append("Rejection cues with no clear redirect target.")
-    elif unsure_score > 0 or (agree_score > 0 and reject_score > 0):
+    elif unsure_score > 0:
         reaction = "unsure"
-        notes.append("Uncertainty or mixed cues detected.")
+        notes.append("Uncertainty cues detected.")
     else:
         reaction = "unsure"
         notes.append("Signals were weak or ambiguous; defaulted to unsure.")
