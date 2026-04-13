@@ -17,17 +17,9 @@ def _selected_positive_state_score(text: str, selected_thread: str) -> tuple[int
 
     for term in selected_terms:
         for cue in POSITIVE_STATE_CUES:
-            patterns = [
-                f"{term} has been {cue}",
-                f"{term} been {cue}",
-                f"{term} is {cue}",
-                f"my {term} has been {cue}",
-                f"my {term} is {cue}",
-            ]
-            for pattern in patterns:
-                if pattern in text:
-                    score += 2
-                    matched.append(pattern)
+            if term in text and cue in text:
+                score += 2
+                matched.append(f"{term} + {cue}")
     return score, sorted(set(matched))
 
 SUPPORTED_THREADS = {
