@@ -1,3 +1,27 @@
+def is_agree_with_explanation(reply_text: str, selected_thread: str, found_threads: list, agree_score: int) -> bool:
+    if agree_score == 0 or not selected_thread or not found_threads:
+        return False
+    text = reply_text.lower()
+    # Causal cues
+    causal_cues = ["because", "so", "to ", "which is why", "thats why", "that's why", "due to"]
+    if not any(cue in text for cue in causal_cues):
+        return False
+    # Selected thread must be mentioned or implied
+    if selected_thread not in text:
+        # For sleep_rest, allow 'sleep' as proxy
+        if selected_thread == "sleep_rest" and "sleep" not in text:
+            return False
+    # Special-case for sleep_rest: work/study as cause
+    if selected_thread == "sleep_rest":
+        sleep_phrases = [
+            "cut it short", "cut sleep short", "not getting enough sleep", "less sleep", "sleep less"
+        ]
+        if any(phrase in text for phrase in sleep_phrases):
+            work_terms = THREAD_KEYWORDS.get("work_study_routine", set())
+            if any(term in text for term in work_terms):
+                return True
+    # General: if another thread is mentioned and causal cue present, treat as agree+explanation
+    return True
 import re
 from typing import Dict, List, Optional
 
@@ -321,15 +345,20 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     redirect_supported = False
 
     if has_redirect_target and move_away_signal:
-        reaction = "redirect"
-        if found_threads:
-            redirected_thread = found_threads[0]
-            redirect_supported = True
-            notes.append("User moved away from selected thread and pointed to another supported thread.")
+        # Check for agree+explanation before redirect
+        if is_agree_with_explanation(reply_text, selected_thread, found_threads, agree_score):
+            reaction = "agree"
+            notes.append("User agreed with the selected thread and explained its cause.")
         else:
-            redirected_text = unsupported_text
-            redirect_supported = False
-            notes.append("User moved away from selected thread and pointed to an unsupported issue.")
+            reaction = "redirect"
+            if found_threads:
+                redirected_thread = found_threads[0]
+                redirect_supported = True
+                notes.append("User moved away from selected thread and pointed to another supported thread.")
+            else:
+                redirected_text = unsupported_text
+                redirect_supported = False
+                notes.append("User moved away from selected thread and pointed to an unsupported issue.")
     elif reject_score > unsure_score and not has_redirect_target:
         reaction = "reject"
         notes.append("Rejection stronger than uncertainty.")
