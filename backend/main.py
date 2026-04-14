@@ -1,5 +1,7 @@
+from typing import List, Optional
+
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 from extractors import (
@@ -10,9 +12,10 @@ from extractors import (
     extract_tone,
     normalize_text,
     tokenize,
-)                                           
+)
 from hypothesis_reaction import classify_hypothesis_reaction
 from responses import generate_iteration2_reply
+from thread_resolution import resolve_thread
 from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
 
 app = FastAPI()
@@ -33,6 +36,14 @@ class Message(BaseModel):
 class ReactionPayload(BaseModel):
     reply: str
     selected_thread: str
+
+
+class ThreadResolutionPayload(BaseModel):
+    selected_thread: Optional[str] = None
+    reaction: str
+    redirected_thread: Optional[str] = None
+    themes: List[str] = Field(default_factory=list)
+    tried_threads: List[str] = Field(default_factory=list)
 
 
 @app.post("/chat")
@@ -90,10 +101,18 @@ def chat(payload: Message):
 
 @app.post("/classify-reaction")
 def classify_reaction(payload: ReactionPayload):
-    result = classify_hypothesis_reaction(
+    return classify_hypothesis_reaction(
         reply_text=payload.reply,
         selected_thread=payload.selected_thread,
     )
-    print("Reaction classification:", result)
-    return result
 
+
+@app.post("/resolve-thread")
+def resolve_thread_endpoint(payload: ThreadResolutionPayload):
+    return resolve_thread(
+        selected_thread=payload.selected_thread,
+        reaction=payload.reaction,
+        redirected_thread=payload.redirected_thread,
+        themes=payload.themes,
+        tried_threads=payload.tried_threads,
+    )
