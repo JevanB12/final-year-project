@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from fastapi.middleware.cors import CORSMiddleware
 
 from extractors import (
+    detect_strain,
     extract_intensity,
     extract_points,
     extract_sentiment,
@@ -55,6 +56,10 @@ def chat(payload: Message):
     tone = extract_tone(pos, neg)
     word_count = len(tokenize(text))
     intensity = extract_intensity(pos, neg, raw_text, word_count)
+    strain = detect_strain(text)
+    if strain and tone == "neutral":
+        tone = "mixed"
+        intensity = min(1.0, intensity + 0.15)
     themes = extract_themes(text)
     positive_points, negative_points = extract_points(text)
 
@@ -78,6 +83,7 @@ def chat(payload: Message):
         selected_thread=selected_thread,
         text=text,
         negative_points=negative_points,
+        strain_detected=strain,
     )
 
     return {

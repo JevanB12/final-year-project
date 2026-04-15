@@ -16,10 +16,20 @@ STRONG_NEGATIVE_CUES = {
 }
 
 
-def generate_acknowledgement(tone: str, themes: List[str], intensity: float, text: str = "") -> str:
+def generate_acknowledgement(
+    tone: str,
+    themes: List[str],
+    intensity: float,
+    text: str = "",
+    strain_detected: bool = False,
+) -> str:
     has_strong_negative = any(cue in text for cue in STRONG_NEGATIVE_CUES)
 
-    if tone == "negative" or has_strong_negative:
+    if strain_detected and tone != "negative" and not has_strong_negative:
+        base = "Sounds like you've got quite a lot going on, even if you're managing it."
+        if intensity > 0.7:
+            base += " It sounds pretty intense."
+    elif tone == "negative" or has_strong_negative:
         base = "That sounds like a pretty tough day."
     elif tone == "positive":
         base = "Sounds like there were some good parts to the day."
@@ -28,10 +38,11 @@ def generate_acknowledgement(tone: str, themes: List[str], intensity: float, tex
     else:
         base = "Got you."
 
-    if intensity > 0.7:
-        base += " It sounds pretty intense."
-    elif intensity > 0.4:
-        base += " There's a bit going on in there."
+    if not (strain_detected and tone != "negative" and not has_strong_negative):
+        if intensity > 0.7:
+            base += " It sounds pretty intense."
+        elif intensity > 0.4:
+            base += " There's a bit going on in there."
 
     if "sleep_rest" in themes and tone in {"negative", "mixed"}:
         base += " The tiredness stands out."
@@ -89,14 +100,22 @@ def generate_iteration2_reply(
     selected_thread: Optional[str],
     text: str = "",
     negative_points: Optional[List[str]] = None,
+    strain_detected: bool = False,
 ) -> str:
     if tone == "positive" and not negative_points:
         return generate_positive_reflection(themes)
     if selected_thread is None:
         if tone == "negative":
             return random.choice(NEGATIVE_FALLBACK_RESPONSES)
+        if strain_detected:
+            return (
+                "Sounds like you've got quite a lot going on, even if you're managing it. "
+                "Does any part of that feel harder to carry than the rest right now?"
+            )
         return random.choice(NEUTRAL_RESPONSES)
-    acknowledgement = generate_acknowledgement(tone, themes, intensity, text)
+    acknowledgement = generate_acknowledgement(
+        tone, themes, intensity, text, strain_detected=strain_detected
+    )
     bridge = generate_thread_bridge(selected_thread, text)
     question = generate_soft_clarification(
         selected_thread,

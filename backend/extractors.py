@@ -14,6 +14,25 @@ from lexicons import (
     themes_map,
 )
 
+STRAIN_CUES = {
+    "tiring",
+    "draining",
+    "a lot",
+    "a bit much",
+    "too much",
+    "juggling",
+    "juggle",
+    "nonstop",
+    "full on",
+    "busy",
+    "packed",
+    "quite a lot",
+}
+
+
+def detect_strain(text: str) -> bool:
+    return any(cue in text for cue in STRAIN_CUES)
+
 
 def normalize_text(text: str) -> str:
     text = text.lower()
