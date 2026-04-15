@@ -85,18 +85,28 @@ def _build_reject_response(
     alternative_thread: Optional[str],
     original_thread: Optional[str],
 ) -> str:
+    original_phrase = _soft_phrase(original_thread)
+
     if alternative_thread:
         alt_phrase = _soft_phrase(alternative_thread) or "something else going on"
+        if original_phrase:
+            return (
+                "Okay, that helps. "
+                f"It sounds like it might be less about {original_phrase} after all. "
+                f"I wonder if it could be more to do with {alt_phrase}, "
+                "or maybe something else sitting underneath it a bit. Does that feel any closer?"
+            )
         return (
-            "Alright, that’s useful to know. "
-            f"Maybe it’s less about {_soft_phrase(original_thread) or 'that'} and more about {alt_phrase}. "
-            "Does that feel any closer?"
+            "Okay, that helps. "
+            f"I wonder if it could be more to do with {alt_phrase}, "
+            "or maybe something else in the background. Does that feel any closer?"
         )
 
     return (
-        "Alright, that’s useful to know. "
-        "It might be something else going on then. "
-        "We can take a step back and look at it a bit more openly."
+        "Okay, that helps. "
+        "It sounds like that might not be the main thing here after all. "
+        "It could be something else in the background, or just something that’s a bit hard to pin down right now. "
+        "Does anything else feel like it’s been weighing on you lately?"
     )
 
 
@@ -104,7 +114,7 @@ def _build_redirect_response(resolved_thread: str) -> str:
     phrase = _soft_phrase(resolved_thread) or "that side of things"
     return (
         f"Yeah, that makes sense. It may be more about {phrase}. "
-        "We can shift focus there."
+        "We can shift focus there gently."
     )
 
 
@@ -120,7 +130,7 @@ def _build_unsure_response(
             "Yeah, that makes sense — it can be hard to pin down exactly what’s behind it. "
             f"It could be something around {primary_phrase}, "
             f"or maybe {secondary_phrase}. "
-            "Does either of those feel like it fits a bit, or is it still unclear?"
+            "Does either of those feel like they fit a bit, or is it still unclear?"
         )
 
     if primary_phrase:
@@ -134,6 +144,37 @@ def _build_unsure_response(
     return (
         "Yeah, that makes sense — it can be hard to pin down exactly what’s behind it straight away. "
         "We can keep it open and narrow it down gently from here."
+    )
+
+
+def _build_reject_clarification_question(original_thread: Optional[str]) -> str:
+    original_phrase = _soft_phrase(original_thread)
+
+    if original_phrase:
+        return (
+            f"Okay, that helps. So it might not really be about {original_phrase} then. "
+            "It could be something else in the background, or just something that’s a bit harder to pin down right now. "
+            "Does anything else feel like it’s been weighing on you lately?"
+        )
+
+    return (
+        "Okay, that helps. It sounds like that might not really be the main thing here then. "
+        "It could be something else in the background, or just something that’s a bit hard to pin down right now. "
+        "Does anything else feel like it’s been weighing on you lately?"
+    )
+
+
+def _build_redirect_clarification_question() -> str:
+    return (
+        "Got it. We can keep this a bit open for now. "
+        "What feels like it’s been sitting underneath things most lately?"
+    )
+
+
+def _build_unknown_clarification_question() -> str:
+    return (
+        "I’m not fully sure which direction fits best yet, but we can keep it open. "
+        "What feels like it’s been affecting you most lately?"
     )
 
 
@@ -205,10 +246,7 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": (
-                "Thanks, that helps. Which area feels closer right now: sleep/rest, work/study, "
-                "daily structure, physical activity, or meals?"
-            ),
+            "next_question": _build_reject_clarification_question(selected_thread),
             "tried_threads": updated_tried_threads,
             "reaction_status": "rejected",
             "response": _build_reject_response(alternative_thread, selected_thread),
@@ -247,10 +285,7 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": (
-                "Got it. What does it feel more related to right now? "
-                "Sleep/rest, work/study, routine, activity, or meals?"
-            ),
+            "next_question": _build_redirect_clarification_question(),
             "tried_threads": updated_tried_threads,
             "reaction_status": "redirected",
             "response": "Yeah, that makes sense. We can shift focus a bit and see what fits better.",
@@ -286,9 +321,7 @@ def resolve_thread(
         "resolved_thread": None,
         "next_thread": None,
         "resolution_status": "needs_clarification",
-        "next_question": (
-            "I’m not fully sure which direction fits best yet. Which area feels closest right now?"
-        ),
+        "next_question": _build_unknown_clarification_question(),
         "tried_threads": updated_tried_threads,
         "reaction_status": "unknown",
         "response": (
