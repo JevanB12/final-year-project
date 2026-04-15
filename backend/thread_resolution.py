@@ -18,20 +18,78 @@ THREAD_SOFT_PHRASES = {
     "meals_regularity": "whether your meals have been a bit off",
 }
 
+GUIDED_NARROWING_QUESTIONS = {
+    "work_study_routine": "Alright — would you say it feels more like pressure in the moment, or more like your mind doesn’t really switch off afterwards?",
+    "sleep_rest": "Alright — would you say it feels more like low energy physically, or more like your mind keeps going even when you’re trying to rest?",
+    "daily_structure": "Alright — does it feel more like the day has been too full on, or more like there hasn’t been enough proper downtime?",
+    "physical_activity": "Alright — does it feel more like physical tiredness in your body, or more like a mental heaviness?",
+    "meals_regularity": "Alright — does it feel more like low energy from not eating properly, or more like something else has been weighing on you?",
+}
+
+GENERIC_GUIDED_QUESTION = (
+    "Alright — would you say it feels more like pressure, tiredness, or difficulty switching off?"
+)
+
 THREAD_HINT_TERMS = {
     "work_study_routine": {"work", "study", "deadline", "assignment", "pressure", "coursework"},
     "sleep_rest": {"sleep", "rest", "tired", "exhausted", "drained", "energy"},
     "daily_structure": {"routine", "schedule", "structure", "busy", "nonstop", "downtime"},
-    "physical_activity": {"exercise", "activity", "workout", "gym", "movement", "training"},
-    "meals_regularity": {"meal", "meals", "eat", "eating", "breakfast", "lunch", "dinner"},
+    "physical_activity": {"exercise", "activity", "workout", "gym", "movement", "training", "physical"},
+    "meals_regularity": {"meal", "meals", "eat", "eating", "breakfast", "lunch", "dinner", "food"},
 }
 
-EVIDENCE_QUESTIONS = [
-    "When it comes up most, does it feel more like pressure, overthinking, or just a general sense of being off?",
-    "When you notice it most, what’s usually going on around you?",
-    "Does it feel more mental, more physical, or more like you can’t switch off?",
-    "Is it more there while you’re working, or later when you’re trying to relax?",
-]
+GUIDED_THREAD_SIGNALS = {
+    "work_study_routine": {
+        "pressure",
+        "work",
+        "study",
+        "overthinking",
+        "mind doesn't switch off",
+        "mind doesnt switch off",
+        "switch off afterwards",
+        "afterwards",
+        "mental pressure",
+    },
+    "sleep_rest": {
+        "tired",
+        "tiredness",
+        "low energy",
+        "rest",
+        "sleep",
+        "drained",
+        "exhausted",
+    },
+    "daily_structure": {
+        "full on",
+        "busy",
+        "packed",
+        "nonstop",
+        "downtime",
+        "no downtime",
+        "routine",
+        "structure",
+    },
+    "physical_activity": {
+        "physical",
+        "body",
+        "physically",
+        "movement",
+        "exercise",
+        "gym",
+        "active",
+    },
+    "meals_regularity": {
+        "food",
+        "meal",
+        "meals",
+        "eat",
+        "eating",
+        "hungry",
+        "breakfast",
+        "lunch",
+        "dinner",
+    },
+}
 
 
 def _dedupe(items: List[str]) -> List[str]:
@@ -88,31 +146,40 @@ def _pick_alternative(
     return None
 
 
-def _pick_evidence_question(rejection_count: int) -> str:
-    index = min(max(rejection_count, 0), len(EVIDENCE_QUESTIONS) - 1)
-    return EVIDENCE_QUESTIONS[index]
-
-
-def _build_fallback_open_question() -> str:
-    return "What feels most noticeable about it when it comes up?"
+def _build_guided_question(thread: Optional[str]) -> str:
+    if not thread:
+        return GENERIC_GUIDED_QUESTION
+    return GUIDED_NARROWING_QUESTIONS.get(thread, GENERIC_GUIDED_QUESTION)
 
 
 def _explicitly_mentions_thread(text: str, thread: str) -> bool:
     normalized = (text or "").strip().lower()
-    if not normalized:
+    if not normalized or not thread:
         return False
     return any(term in normalized for term in THREAD_HINT_TERMS.get(thread, set()))
 
 
-def _score_thread_from_evidence(text: str, thread: str) -> float:
+def _score_thread_from_guided_answer(text: str, thread: str) -> float:
     normalized = (text or "").strip().lower()
     if not normalized:
         return 0.0
-    terms = THREAD_HINT_TERMS.get(thread, set())
+
     score = 0.0
-    for term in terms:
-        if term in normalized:
+
+    for cue in GUIDED_THREAD_SIGNALS.get(thread, set()):
+        if cue in normalized:
             score += 1.0
+
+    if thread == "work_study_routine":
+        if "switch off" in normalized or "overthinking" in normalized or "pressure" in normalized:
+            score += 1.0
+    if thread == "sleep_rest":
+        if "low energy" in normalized or "tired" in normalized or "drained" in normalized:
+            score += 1.0
+    if thread == "physical_activity":
+        if "physical" in normalized or "body" in normalized:
+            score += 1.0
+
     return score
 
 
@@ -136,20 +203,18 @@ def _build_reject_response(
             return (
                 "Okay, that helps. "
                 f"It sounds like it might be less about {original_phrase} after all. "
-                f"I wonder if it could be more to do with {alt_phrase}, "
-                "or maybe something else sitting underneath it a bit. Does that feel any closer?"
+                f"I wonder if it could be more to do with {alt_phrase}. "
+                "Does that feel any closer?"
             )
         return (
             "Okay, that helps. "
-            f"I wonder if it could be more to do with {alt_phrase}, "
-            "or maybe something else in the background. Does that feel any closer?"
+            f"I wonder if it could be more to do with {alt_phrase}. "
+            "Does that feel any closer?"
         )
 
     return (
         "Okay, that helps. "
-        "It sounds like that might not be the main thing here after all. "
-        "It could be something else in the background, or just something that’s a bit hard to pin down right now. "
-        "Does anything else feel like it’s been weighing on you lately?"
+        "It sounds like that might not be the main thing here after all."
     )
 
 
@@ -170,55 +235,17 @@ def _build_unsure_response(
 
     if primary_phrase and secondary_phrase:
         return (
-            "Yeah, that makes sense — it can be hard to pin down exactly what’s behind it. "
-            f"It could be something around {primary_phrase}, "
-            f"or maybe {secondary_phrase}. "
-            "Does either of those feel like they fit a bit, or is it still unclear?"
+            "Yeah, that makes sense. "
+            f"It could be something around {primary_phrase}, or maybe {secondary_phrase}."
         )
 
     if primary_phrase:
         return (
-            "Yeah, that makes sense — it can be hard to pin down exactly what’s behind it. "
-            f"It could be something around {primary_phrase}, "
-            "but it might also be something else in the background. "
-            "Does that feel close, or not really?"
+            "Yeah, that makes sense. "
+            f"It could be something around {primary_phrase}, but it may be a bit more mixed than that."
         )
 
-    return (
-        "Yeah, that makes sense — it can be hard to pin down exactly what’s behind it straight away. "
-        "We can keep it open and narrow it down gently from here."
-    )
-
-
-def _build_reject_clarification_question(original_thread: Optional[str]) -> str:
-    original_phrase = _soft_phrase(original_thread)
-
-    if original_phrase:
-        return (
-            f"Okay, that helps. So it might not really be about {original_phrase} then. "
-            "It could be something else in the background, or just something that’s a bit harder to pin down right now. "
-            "Does anything else feel like it’s been weighing on you lately?"
-        )
-
-    return (
-        "Okay, that helps. It sounds like that might not really be the main thing here then. "
-        "It could be something else in the background, or just something that’s a bit hard to pin down right now. "
-        "Does anything else feel like it’s been weighing on you lately?"
-    )
-
-
-def _build_redirect_clarification_question() -> str:
-    return (
-        "Got it. We can keep this a bit open for now. "
-        "What feels like it’s been sitting underneath things most lately?"
-    )
-
-
-def _build_unknown_clarification_question() -> str:
-    return (
-        "I’m not fully sure which direction fits best yet, but we can keep it open. "
-        "What feels like it’s been affecting you most lately?"
-    )
+    return "Yeah, that makes sense. It may just need a slightly different angle."
 
 
 def resolve_thread(
@@ -249,7 +276,7 @@ def resolve_thread(
     selected_history = [selected_thread] if selected_thread else []
     updated_tried_threads = _dedupe([*tried_threads, *selected_history])
     updated_rejected_threads = _dedupe(rejected_threads)
-    current_mode = "awaiting_reaction_to_hypothesis" if selected_thread else "awaiting_evidence_clarification"
+    current_mode = "awaiting_reaction_to_hypothesis" if selected_thread else "awaiting_guided_clarification"
 
     if reaction in {"accept", "agree"}:
         resolved_thread = selected_thread
@@ -270,7 +297,6 @@ def resolve_thread(
                 "That makes sense. We can stay with that and narrow it down a bit more."
             ),
             "notes": ["User accepted/agreed with the current hypothesis thread."],
-            "candidate_threads": candidates,
         }
 
     if reaction == "reject":
@@ -300,10 +326,9 @@ def resolve_thread(
                 "reaction_status": "rejected",
                 "response": _build_reject_response(alternative_thread, selected_thread),
                 "notes": [
-                    "User rejected the initial hypothesis.",
+                    "User rejected the current hypothesis.",
                     "Switching to another plausible thread for confirmation.",
                 ],
-                "candidate_threads": candidates,
             }
 
         return {
@@ -311,18 +336,18 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _pick_evidence_question(rejection_count),
+            "next_question": _build_guided_question(selected_thread),
             "tried_threads": updated_tried_threads,
             "candidate_threads": candidates,
             "rejected_threads": updated_rejected_threads,
             "rejection_count": rejection_count,
-            "mode": "awaiting_evidence_clarification",
-            "latest_question_type": "evidence",
+            "mode": "awaiting_guided_clarification",
+            "latest_question_type": "guided_clarification",
             "reaction_status": "rejected",
             "response": _build_reject_response(alternative_thread, selected_thread),
             "notes": [
-                "User rejected current hypothesis.",
-                "Switching to evidence clarification to avoid stalling after repeated rejection.",
+                "User rejected the current hypothesis.",
+                "Switching to a simpler guided narrowing question instead of open exploration.",
             ],
         }
 
@@ -359,15 +384,15 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _pick_evidence_question(rejection_count),
+            "next_question": GENERIC_GUIDED_QUESTION,
             "tried_threads": updated_tried_threads,
             "candidate_threads": candidates,
             "rejected_threads": updated_rejected_threads,
             "rejection_count": rejection_count,
-            "mode": "awaiting_evidence_clarification",
-            "latest_question_type": "evidence",
+            "mode": "awaiting_guided_clarification",
+            "latest_question_type": "guided_clarification",
             "reaction_status": "redirected",
-            "response": "Yeah, that makes sense. We can shift focus a bit and see what fits better.",
+            "response": "Yeah, that makes sense. We can keep it simple and narrow it down from here.",
             "notes": ["User redirected but no clear supported target was detected."],
         }
 
@@ -377,12 +402,14 @@ def resolve_thread(
                 (thread for thread in updated_rejected_threads if _explicitly_mentions_thread(user_text, thread)),
                 None,
             )
+
             eligible = [thread for thread in candidates if thread not in updated_rejected_threads]
             scored = sorted(
-                [(thread, _score_thread_from_evidence(user_text, thread)) for thread in eligible],
+                [(thread, _score_thread_from_guided_answer(user_text, thread)) for thread in eligible],
                 key=lambda item: item[1],
                 reverse=True,
             )
+
             best_thread = scored[0][0] if scored else None
             best_score = scored[0][1] if scored else 0.0
 
@@ -406,7 +433,7 @@ def resolve_thread(
                     "reaction_status": "unsure",
                     "response": _build_redirect_response(best_thread),
                     "notes": [
-                        "Evidence clarification answer rescored candidate threads.",
+                        "Guided clarification answer surfaced a plausible candidate thread.",
                         "Moving back to a soft hypothesis check.",
                     ],
                 }
@@ -416,18 +443,18 @@ def resolve_thread(
                 "resolved_thread": None,
                 "next_thread": None,
                 "resolution_status": "needs_clarification",
-                "next_question": _build_fallback_open_question(),
+                "next_question": GENERIC_GUIDED_QUESTION,
                 "tried_threads": updated_tried_threads,
                 "candidate_threads": candidates,
                 "rejected_threads": updated_rejected_threads,
                 "rejection_count": rejection_count,
-                "mode": "fallback_open_exploration",
-                "latest_question_type": "evidence",
+                "mode": "awaiting_guided_clarification",
+                "latest_question_type": "guided_clarification",
                 "reaction_status": "unsure",
-                "response": "That makes sense. We can keep it open for a moment and focus on what stands out most.",
+                "response": "That makes sense. Let’s keep it simple and narrow it down a little.",
                 "notes": [
-                    "Evidence clarification did not surface a strong candidate thread.",
-                    "Moved to fallback open exploration question.",
+                    "Guided clarification answer did not surface a strong candidate thread.",
+                    "Keeping clarification guided and concrete.",
                 ],
             }
 
@@ -442,19 +469,18 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _pick_evidence_question(rejection_count),
+            "next_question": _build_guided_question(selected_thread),
             "tried_threads": updated_tried_threads,
             "candidate_threads": candidates,
             "rejected_threads": updated_rejected_threads,
             "rejection_count": rejection_count,
-            "mode": "awaiting_evidence_clarification",
-            "latest_question_type": "evidence",
+            "mode": "awaiting_guided_clarification",
+            "latest_question_type": "guided_clarification",
             "reaction_status": "unsure",
             "response": _build_unsure_response(selected_thread, secondary_thread),
             "notes": [
-                "User was unsure, so the system kept the conversation exploratory and offered soft possibilities."
+                "User was unsure, so the system used a guided narrowing question instead of open exploration."
             ],
-            "suggested_threads": _dedupe([selected_thread, secondary_thread]),
         }
 
     return {
@@ -462,16 +488,14 @@ def resolve_thread(
         "resolved_thread": None,
         "next_thread": None,
         "resolution_status": "needs_clarification",
-        "next_question": _pick_evidence_question(rejection_count),
+        "next_question": GENERIC_GUIDED_QUESTION,
         "tried_threads": updated_tried_threads,
         "candidate_threads": candidates,
         "rejected_threads": updated_rejected_threads,
         "rejection_count": rejection_count,
-        "mode": "awaiting_evidence_clarification" if current_mode != "awaiting_reaction_to_hypothesis" else current_mode,
-        "latest_question_type": "evidence",
+        "mode": "awaiting_guided_clarification" if current_mode != "awaiting_reaction_to_hypothesis" else current_mode,
+        "latest_question_type": "guided_clarification",
         "reaction_status": "unknown",
-        "response": (
-            "I’m not fully sure which direction fits best yet, so we can keep it open and work through it gradually."
-        ),
+        "response": "I’m not fully sure yet, but we can narrow it down in a simpler way.",
         "notes": ["Fallback branch used because reaction was unknown."],
     }

@@ -98,6 +98,11 @@ OPEN_CLARIFICATION_VAGUE_CUES = {
     "a little",
     "a bit",
     "maybe",
+    "more mental",
+    "more physical",
+    "pressure",
+    "tiredness",
+    "switch off",
 }
 
 THREAD_KEYWORDS = {

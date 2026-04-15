@@ -184,14 +184,12 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
 
-  const [conversationMode, setConversationMode] = useState<
-    | "awaiting_reaction_to_hypothesis"
-    | "awaiting_evidence_clarification"
-    | "resolved_thread"
-    | "fallback_open_exploration"
-    | "awaiting_initial_day_message"
-  >("awaiting_initial_day_message");
-  const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
+const [conversationMode, setConversationMode] = useState<
+  | "awaiting_reaction_to_hypothesis"
+  | "awaiting_guided_clarification"
+  | "resolved_thread"
+  | "awaiting_initial_day_message"
+>("awaiting_initial_day_message");
 
   const [themes, setThemes] = useState<string[]>([]);
   const [candidateThreads, setCandidateThreads] = useState<string[]>([]);
@@ -394,11 +392,10 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
         await runSubIssueSuggestionAndAction(userMessage, resolvedThread);
       } else if (
         conversationMode === "awaiting_reaction_to_hypothesis" ||
-        conversationMode === "awaiting_evidence_clarification" ||
-        conversationMode === "fallback_open_exploration"
+        conversationMode === "awaiting_guided_clarification"
       ) {
         const activeSelectedThread =
-          conversationMode === "awaiting_reaction_to_hypothesis" ? pendingSelectedThread : null;
+          conversationMode === "awaiting_reaction_to_hypothesis" ? selectedThread : null;
 
         const reactionData = await postJson<ReactionResponse>(
           "http://localhost:8000/classify-reaction",
@@ -525,12 +522,10 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
             },
           ]);
           setPendingSelectedThread(threadData.next_thread || null);
-          if (threadData.mode === "fallback_open_exploration") {
-            setConversationMode("fallback_open_exploration");
-          } else if (threadData.next_thread) {
+          if (threadData.next_thread) {
             setConversationMode("awaiting_reaction_to_hypothesis");
           } else {
-            setConversationMode("awaiting_evidence_clarification");
+            setConversationMode("awaiting_guided_clarification");
           }
         } else {
           setConversationMode("awaiting_initial_day_message");
@@ -594,7 +589,7 @@ words: ${data.debug?.word_count ?? 0}`;
           setConversationMode("awaiting_reaction_to_hypothesis");
         } else {
           setPendingSelectedThread(null);
-          setConversationMode("awaiting_evidence_clarification");
+          setConversationMode("awaiting_guided_clarification");
         }
       }
     } catch (error) {
@@ -678,10 +673,8 @@ words: ${data.debug?.word_count ?? 0}`;
                 ? "Reply to the assistant's narrowing question..."
                 : conversationMode === "awaiting_reaction_to_hypothesis"
                 ? "Reply to the assistant's hypothesis..."
-                : conversationMode === "awaiting_evidence_clarification"
-                ? "Reply to the concrete follow-up question..."
-                : conversationMode === "fallback_open_exploration"
-                ? "Reply with what feels most noticeable..."
+                : conversationMode === "awaiting_guided_clarification"
+                ? "Reply to the assistant's guided question..."
                 : "Type a message..."
             }
             className="flex-1 border rounded-lg px-4 py-2 placeholder-gray-500 text-gray-700"
