@@ -2,6 +2,30 @@ from typing import Dict, List, Set, Tuple
 
 from extractors import normalize_text
 
+LEANING_PHRASES: Tuple[str, ...] = (
+    "leaning toward",
+    "most likely",
+    "seems more like",
+    "more like",
+    "more the",
+    "i'd say",
+    "i think",
+    "leaning",
+    "probably",
+    "more",
+)
+
+UNCERTAIN_PHRASES: Tuple[str, ...] = (
+    "not sure",
+    "unsure",
+    "dont know",
+    "don't know",
+    "hard to say",
+    "either",
+    "both",
+    "maybe both",
+)
+
 
 THREAD_SUB_ISSUE_KEYWORDS: Dict[str, Dict[str, Set[str]]] = {
     "sleep_rest": {
@@ -360,6 +384,37 @@ def _notes_for_hits(
     return [f"Keyword matches for: {', '.join(sorted(hits))}."]
 
 
+def _has_any_phrase(text: str, phrases: Tuple[str, ...]) -> bool:
+    return any(phrase in text for phrase in phrases)
+
+
+def _leaning_signal_score(text: str, cues: Set[str]) -> int:
+    if not cues:
+        return 0
+
+    score = 0
+    has_leaning_phrase = _has_any_phrase(text, LEANING_PHRASES)
+    if not has_leaning_phrase:
+        return 0
+
+    for cue in cues:
+        if cue not in text:
+            continue
+
+        # Broad leaning signal when user indicates direction and mentions cue.
+        score += 1
+
+        # Stronger directional patterns for informal comparison answers.
+        score += sum(
+            2
+            for phrase in LEANING_PHRASES
+            if f"{phrase} {cue}" in text
+            or f"{phrase} the {cue}" in text
+            or f"{phrase} toward {cue}" in text
+        )
+    return score
+
+
 def resolve_sub_issue(
     resolved_thread: str,
     user_text: str,
@@ -410,8 +465,35 @@ def resolve_sub_issue(
         base_out["resolved"] = True
         base_out["sub_issue_status"] = "confirmed"
         base_out["candidate_sub_issues"] = [s0]
-        base_out["notes"].append("Single dominant sub-issue match.")
+        base_out["notes"].append("Resolved by direct keyword match (single dominant sub-issue).")
         return base_out
+
+    # Iteration 6 should be permissive: if user is leaning and one candidate
+    # is directionally stronger, resolve instead of looping.
+    leaning_ranked: List[Tuple[str, int]] = [
+        (sid, _leaning_signal_score(text, keywords.get(sid, set())))
+        for sid, _ in positive
+    ]
+    leaning_ranked.sort(key=lambda x: (-x[1], x[0]))
+    l0 = leaning_ranked[0][1] if leaning_ranked else 0
+    l1 = leaning_ranked[1][1] if len(leaning_ranked) > 1 else 0
+
+    if l0 > 0:
+        leaned_sid = leaning_ranked[0][0]
+        leaned_keyword_score = dict(positive).get(leaned_sid, 0)
+        other_keyword_score = max(
+            [score for sid, score in positive if sid != leaned_sid],
+            default=0,
+        )
+        if l0 > l1 or leaned_keyword_score > other_keyword_score:
+            base_out["sub_issue"] = leaned_sid
+            base_out["resolved"] = True
+            base_out["sub_issue_status"] = "confirmed"
+            base_out["candidate_sub_issues"] = [leaned_sid]
+            base_out["notes"].append("Resolved by leaning match at sub-issue stage.")
+            return base_out
+
+    has_uncertainty = _has_any_phrase(text, UNCERTAIN_PHRASES)
 
     if c0 >= 1 and c1 >= 1 and (c0 - c1) <= 1:
         a, b = positive[0][0], positive[1][0]
@@ -420,7 +502,10 @@ def resolve_sub_issue(
         base_out["sub_issue_status"] = "needs_clarification"
         base_out["next_question"] = _comparison_question(a, b)
         base_out["candidate_sub_issues"] = [a, b]
-        base_out["notes"].append("Two plausible sub-issues detected.")
+        if has_uncertainty:
+            base_out["notes"].append("Ambiguous or uncertain answer; requesting clarification.")
+        else:
+            base_out["notes"].append("Two plausible sub-issues detected; no clear leaning signal.")
         return base_out
 
     base_out["sub_issue_status"] = "needs_clarification"
