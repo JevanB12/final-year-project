@@ -18,6 +18,7 @@ from hypothesis_reaction import classify_hypothesis_reaction
 from responses import generate_iteration2_reply
 from thread_resolution import resolve_thread
 from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
+from sub_issue_resolution import resolve_sub_issue
 
 app = FastAPI()
 
@@ -45,6 +46,12 @@ class ThreadResolutionPayload(BaseModel):
     redirected_thread: Optional[str] = None
     themes: List[str] = Field(default_factory=list)
     tried_threads: List[str] = Field(default_factory=list)
+
+
+class SubIssueResolutionPayload(BaseModel):
+    resolved_thread: str
+    user_text: str
+    tried_sub_issues: List[str] = Field(default_factory=list)
 
 
 @app.post("/chat")
@@ -121,4 +128,13 @@ def resolve_thread_endpoint(payload: ThreadResolutionPayload):
         redirected_thread=payload.redirected_thread,
         themes=payload.themes,
         tried_threads=payload.tried_threads,
+    )
+
+
+@app.post("/resolve-sub-issue")
+def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
+    return resolve_sub_issue(
+        resolved_thread=payload.resolved_thread,
+        user_text=payload.user_text,
+        tried_sub_issues=payload.tried_sub_issues,
     )
