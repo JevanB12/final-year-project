@@ -184,12 +184,14 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
 
-const [conversationMode, setConversationMode] = useState<
-  | "awaiting_reaction_to_hypothesis"
-  | "awaiting_guided_clarification"
-  | "resolved_thread"
-  | "awaiting_initial_day_message"
->("awaiting_initial_day_message");
+  const [conversationMode, setConversationMode] = useState<
+    | "awaiting_reaction_to_hypothesis"
+    | "awaiting_guided_clarification"
+    | "resolved_thread"
+    | "awaiting_initial_day_message"
+  >("awaiting_initial_day_message");
+
+  const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
 
   const [themes, setThemes] = useState<string[]>([]);
   const [candidateThreads, setCandidateThreads] = useState<string[]>([]);
@@ -395,7 +397,7 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
         conversationMode === "awaiting_guided_clarification"
       ) {
         const activeSelectedThread =
-          conversationMode === "awaiting_reaction_to_hypothesis" ? selectedThread : null;
+          conversationMode === "awaiting_reaction_to_hypothesis" ? pendingSelectedThread : null;
 
         const reactionData = await postJson<ReactionResponse>(
           "http://localhost:8000/classify-reaction",

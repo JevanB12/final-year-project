@@ -49,6 +49,12 @@ GUIDED_THREAD_SIGNALS = {
         "switch off afterwards",
         "afterwards",
         "mental pressure",
+        "switching off",
+        "switch off",
+        "mind keeps going",
+        "overthinking",
+        "can't relax",
+        "cant relax",
     },
     "sleep_rest": {
         "tired",
@@ -417,7 +423,7 @@ def resolve_thread(
                 best_thread = explicit_reintroduced
                 best_score = max(best_score, 1.0)
 
-            if best_thread and best_score >= 1.0:
+            if best_thread:
                 return {
                     "resolved": False,
                     "resolved_thread": None,
