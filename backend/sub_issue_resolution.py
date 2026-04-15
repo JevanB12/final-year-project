@@ -218,6 +218,18 @@ THREAD_SUB_ISSUE_KEYWORDS: Dict[str, Dict[str, Set[str]]] = {
     },
 }
 
+THREAD_SUB_ISSUE_LOOSE_EXTRAS: Dict[str, Dict[str, Set[str]]] = {
+    "daily_structure": {
+        "overpacked_day": {
+            "overpacked",
+            "packed",
+            "busy",
+            "too busy",
+            "jammed",
+        }
+    }
+}
+
 SUB_ISSUE_LABELS: Dict[str, str] = {
     "low_sleep_duration": "you're not getting enough sleep",
     "poor_sleep_quality": "the quality or restfulness of your sleep",
@@ -265,6 +277,51 @@ GENERIC_NARROW_QUESTIONS: Dict[str, str] = {
 }
 
 
+def _expand_loose_cues(cues: Set[str]) -> Set[str]:
+    expanded: Set[str] = set()
+    for cue in cues:
+        normalized = normalize_text(cue)
+        if not normalized:
+            continue
+
+        expanded.add(normalized)
+        words = [w for w in normalized.split() if w]
+
+        for word in words:
+            expanded.add(word)
+
+            # Add short stem-like variants to support partial confirmations
+            # like "overpacked" -> "overpack", "packed" -> "pack".
+            if word.endswith("ing") and len(word) > 5:
+                expanded.add(word[:-3])
+            if word.endswith("ed") and len(word) > 4:
+                expanded.add(word[:-2])
+            if word.endswith("s") and len(word) > 4:
+                expanded.add(word[:-1])
+
+    return {c for c in expanded if len(c) >= 3}
+
+
+def _build_loose_keywords(
+    strict_keywords: Dict[str, Dict[str, Set[str]]]
+) -> Dict[str, Dict[str, Set[str]]]:
+    loose_keywords: Dict[str, Dict[str, Set[str]]] = {}
+
+    for thread_id, sub_map in strict_keywords.items():
+        loose_keywords[thread_id] = {}
+        for sub_id, cues in sub_map.items():
+            base = _expand_loose_cues(cues)
+            extras = THREAD_SUB_ISSUE_LOOSE_EXTRAS.get(thread_id, {}).get(sub_id, set())
+            if extras:
+                base.update(_expand_loose_cues(extras))
+            loose_keywords[thread_id][sub_id] = base
+
+    return loose_keywords
+
+
+THREAD_SUB_ISSUE_LOOSE_KEYWORDS = _build_loose_keywords(THREAD_SUB_ISSUE_KEYWORDS)
+
+
 def _score_sub_issues(
     text: str,
     keywords: Dict[str, Set[str]],
@@ -274,6 +331,8 @@ def _score_sub_issues(
     for sub_id, cues in keywords.items():
         if sub_id in tried:
             continue
+        # Loose matching intentionally uses simple "in" checks so short,
+        # natural confirmations are still captured.
         count = sum(1 for cue in cues if cue in text)
         scored.append((sub_id, count))
     scored.sort(key=lambda x: (-x[1], x[0]))
@@ -318,7 +377,7 @@ def resolve_sub_issue(
         "notes": [],
     }
 
-    keywords = THREAD_SUB_ISSUE_KEYWORDS.get(resolved_thread)
+    keywords = THREAD_SUB_ISSUE_LOOSE_KEYWORDS.get(resolved_thread)
     if not keywords:
         base_out["notes"].append(f"Unknown or unsupported resolved_thread: {resolved_thread!r}.")
         base_out["next_question"] = (
