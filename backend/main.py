@@ -19,6 +19,7 @@ from responses import generate_iteration2_reply
 from thread_resolution import resolve_thread
 from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
 from sub_issue_resolution import resolve_sub_issue
+from suggestion_mapper import map_suggestion_target
 
 app = FastAPI()
 
@@ -52,6 +53,11 @@ class SubIssueResolutionPayload(BaseModel):
     resolved_thread: str
     user_text: str
     tried_sub_issues: List[str] = Field(default_factory=list)
+
+
+class SuggestionMapPayload(BaseModel):
+    resolved_thread: str
+    sub_issue: str
 
 
 @app.post("/chat")
@@ -137,4 +143,12 @@ def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
         resolved_thread=payload.resolved_thread,
         user_text=payload.user_text,
         tried_sub_issues=payload.tried_sub_issues,
+    )
+
+
+@app.post("/map-suggestion")
+def map_suggestion_endpoint(payload: SuggestionMapPayload):
+    return map_suggestion_target(
+        resolved_thread=payload.resolved_thread,
+        sub_issue=payload.sub_issue,
     )
