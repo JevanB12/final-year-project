@@ -51,6 +51,41 @@ type ReactionResponse = {
   };
 };
 
+type ThreadResolutionResponse = {
+  resolved?: boolean;
+  resolved_thread?: string | null;
+  next_thread?: string | null;
+  resolution_status?: string | null;
+  next_question?: string | null;
+  tried_threads?: string[];
+  notes?: string[];
+};
+
+type SubIssueResolutionResponse = {
+  resolved?: boolean;
+  sub_issue?: string | null;
+  sub_issue_status?: string | null;
+  next_question?: string | null;
+  candidate_sub_issues?: string[];
+  tried_sub_issues?: string[];
+  notes?: string[];
+};
+
+type SuggestionMapResponse = {
+  suggestion_target?: string | null;
+  change_area?: string | null;
+  suggestion_type?: string | null;
+  confidence?: number;
+  notes?: string[];
+};
+
+type Stage =
+  | "initial"
+  | "awaiting_reaction"
+  | "thread_resolution"
+  | "sub_issue_resolution"
+  | "suggestion_mapped";
+
 type Message = {
   sender: "user" | "assistant";
   text: string;
@@ -67,8 +102,110 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
 
-  const [awaitingReaction, setAwaitingReaction] = useState(false);
-  const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
+  const [selectedThread, setSelectedThread] = useState<string | null>(null);
+  const [themes, setThemes] = useState<string[]>([]);
+  const [triedThreads, setTriedThreads] = useState<string[]>([]);
+  const [resolvedThread, setResolvedThread] = useState<string | null>(null);
+  const [resolutionStatus, setResolutionStatus] = useState<string | null>(null);
+  const [triedSubIssues, setTriedSubIssues] = useState<string[]>([]);
+  const [subIssue, setSubIssue] = useState<string | null>(null);
+  const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
+  const [changeArea, setChangeArea] = useState<string | null>(null);
+  const [suggestionType, setSuggestionType] = useState<string | null>(null);
+  const [currentStage, setCurrentStage] = useState<Stage>("initial");
+
+  const postJson = async <T,>(url: string, body: Record<string, unknown>): Promise<T> => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    return response.json() as Promise<T>;
+  };
+
+  const runSubIssueAndSuggestion = async (
+    latestUserMessage: string,
+    threadToUse: string
+  ) => {
+    const subIssueData = await postJson<SubIssueResolutionResponse>(
+      "http://localhost:8000/resolve-sub-issue",
+      {
+        resolved_thread: threadToUse,
+        user_text: latestUserMessage,
+        tried_sub_issues: triedSubIssues,
+      }
+    );
+
+    const subIssueMeta = `resolved: ${String(subIssueData.resolved ?? false)}
+sub_issue: ${subIssueData.sub_issue || "none"}
+sub_issue_status: ${subIssueData.sub_issue_status || "none"}
+next_question: ${subIssueData.next_question || "none"}
+candidate_sub_issues: ${subIssueData.candidate_sub_issues?.join(", ") || "none"}
+tried_sub_issues: ${subIssueData.tried_sub_issues?.join(", ") || "none"}
+notes: ${subIssueData.notes?.join(" | ") || "none"}`;
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "assistant",
+        text: "Iteration 6: sub-issue resolution",
+        meta: subIssueMeta,
+      },
+    ]);
+
+    const nextTriedSubIssues = subIssueData.tried_sub_issues ?? triedSubIssues;
+    setTriedSubIssues(nextTriedSubIssues);
+
+    if (!subIssueData.resolved) {
+      setCurrentStage("sub_issue_resolution");
+      if (subIssueData.next_question) {
+        setMessages((prev) => [
+          ...prev,
+          { sender: "assistant", text: subIssueData.next_question as string },
+        ]);
+      }
+      return;
+    }
+
+    const resolvedSubIssue = subIssueData.sub_issue || null;
+    setSubIssue(resolvedSubIssue);
+
+    const suggestionData = await postJson<SuggestionMapResponse>(
+      "http://localhost:8000/map-suggestion",
+      {
+        resolved_thread: threadToUse,
+        sub_issue: resolvedSubIssue,
+      }
+    );
+
+    const suggestionMeta = `suggestion_target: ${suggestionData.suggestion_target || "none"}
+change_area: ${suggestionData.change_area || "none"}
+suggestion_type: ${suggestionData.suggestion_type || "none"}
+confidence: ${typeof suggestionData.confidence === "number" ? suggestionData.confidence.toFixed(2) : "none"}
+notes: ${suggestionData.notes?.join(" | ") || "none"}`;
+
+    setSuggestionTarget(suggestionData.suggestion_target || null);
+    setChangeArea(suggestionData.change_area || null);
+    setSuggestionType(suggestionData.suggestion_type || null);
+    setCurrentStage("suggestion_mapped");
+
+    setMessages((prev) => [
+      ...prev,
+      {
+        sender: "assistant",
+        text: "Iteration 7: suggestion mapping",
+        meta: suggestionMeta,
+      },
+      {
+        sender: "assistant",
+        text: `Okay, it sounds like the main issue is around ${
+          suggestionData.change_area || "the next change area"
+        }.`,
+      },
+    ]);
+  };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -79,61 +216,104 @@ export default function Home() {
     setLoading(true);
 
     try {
-      if (awaitingReaction && pendingSelectedThread) {
-        const response = await fetch("http://localhost:8000/classify-reaction", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+      if ((currentStage === "awaiting_reaction" || currentStage === "thread_resolution") && selectedThread) {
+        const reactionData = await postJson<ReactionResponse>(
+          "http://localhost:8000/classify-reaction",
+          {
             reply: userMessage,
-            selected_thread: pendingSelectedThread,
-          }),
-        });
+            selected_thread: selectedThread,
+          }
+        );
 
-        const data: ReactionResponse = await response.json();
+        const reactionMeta = `reaction: ${reactionData.reaction}
+confidence: ${typeof reactionData.confidence === "number" ? reactionData.confidence.toFixed(2) : "none"}
+selected_thread: ${reactionData.selected_thread || selectedThread || "none"}
+redirected_thread: ${reactionData.redirected_thread || "none"}
+redirected_text: ${reactionData.redirected_text || "none"}
+redirect_supported: ${String(reactionData.redirect_supported)}
 
-        const meta = `reaction: ${data.reaction}
-confidence: ${data.confidence.toFixed(2)}
-selected_thread: ${data.selected_thread || pendingSelectedThread || "none"}
-redirected_thread: ${data.redirected_thread || "none"}
-redirected_text: ${data.redirected_text || "none"}
-redirect_supported: ${String(data.redirect_supported)}
+matched_signals.agree: ${reactionData.matched_signals?.agree?.join(", ") || "none"}
+matched_signals.reject: ${reactionData.matched_signals?.reject?.join(", ") || "none"}
+matched_signals.redirect: ${reactionData.matched_signals?.redirect?.join(", ") || "none"}
+matched_signals.unsure: ${reactionData.matched_signals?.unsure?.join(", ") || "none"}
 
-matched_signals.agree: ${data.matched_signals?.agree?.join(", ") || "none"}
-matched_signals.reject: ${data.matched_signals?.reject?.join(", ") || "none"}
-matched_signals.redirect: ${data.matched_signals?.redirect?.join(", ") || "none"}
-matched_signals.unsure: ${data.matched_signals?.unsure?.join(", ") || "none"}
-
-agree_score: ${data.debug?.agree_score ?? 0}
-reject_score: ${data.debug?.reject_score ?? 0}
-redirect_score: ${data.debug?.redirect_score ?? 0}
-unsure_score: ${data.debug?.unsure_score ?? 0}
-found_known_thread_terms: ${data.debug?.found_known_thread_terms?.join(", ") || "none"}
-found_unknown_redirect_cue: ${String(data.debug?.found_unknown_redirect_cue ?? false)}
-notes: ${data.debug?.notes?.join(" | ") || "none"}`;
+agree_score: ${reactionData.debug?.agree_score ?? 0}
+reject_score: ${reactionData.debug?.reject_score ?? 0}
+redirect_score: ${reactionData.debug?.redirect_score ?? 0}
+unsure_score: ${reactionData.debug?.unsure_score ?? 0}
+found_known_thread_terms: ${reactionData.debug?.found_known_thread_terms?.join(", ") || "none"}
+found_unknown_redirect_cue: ${String(reactionData.debug?.found_unknown_redirect_cue ?? false)}
+notes: ${reactionData.debug?.notes?.join(" | ") || "none"}`;
 
         setMessages((prev) => [
           ...prev,
           {
             sender: "assistant",
-            text: `Iteration 4 classification: ${data.reaction}`,
-            meta,
+            text: `Iteration 4 classification: ${reactionData.reaction || "unknown"}`,
+            meta: reactionMeta,
           },
         ]);
 
-        setAwaitingReaction(false);
-        setPendingSelectedThread(null);
-      } else {
-        const response = await fetch("http://localhost:8000/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ message: userMessage }),
-        });
+        const threadData = await postJson<ThreadResolutionResponse>(
+          "http://localhost:8000/resolve-thread",
+          {
+            selected_thread: selectedThread,
+            reaction: reactionData.reaction,
+            redirected_thread: reactionData.redirected_thread,
+            themes,
+            tried_threads: triedThreads,
+          }
+        );
 
-        const data: ChatResponse = await response.json();
+        const threadMeta = `resolved: ${String(threadData.resolved ?? false)}
+resolved_thread: ${threadData.resolved_thread || "none"}
+next_thread: ${threadData.next_thread || "none"}
+resolution_status: ${threadData.resolution_status || "none"}
+next_question: ${threadData.next_question || "none"}
+tried_threads: ${threadData.tried_threads?.join(", ") || "none"}
+notes: ${threadData.notes?.join(" | ") || "none"}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "assistant",
+            text: "Iteration 5: thread resolution",
+            meta: threadMeta,
+          },
+        ]);
+
+        const nextTriedThreads = threadData.tried_threads ?? triedThreads;
+        setTriedThreads(nextTriedThreads);
+        setResolutionStatus(threadData.resolution_status || null);
+
+        if (!threadData.resolved) {
+          setCurrentStage("thread_resolution");
+          if (threadData.next_thread) {
+            setSelectedThread(threadData.next_thread);
+          }
+          if (threadData.next_question) {
+            setMessages((prev) => [
+              ...prev,
+              { sender: "assistant", text: threadData.next_question as string },
+            ]);
+          }
+          return;
+        }
+
+        const finalResolvedThread = threadData.resolved_thread || selectedThread;
+        setResolvedThread(finalResolvedThread);
+        setSelectedThread(threadData.next_thread || finalResolvedThread);
+        setCurrentStage("sub_issue_resolution");
+
+        if (finalResolvedThread) {
+          await runSubIssueAndSuggestion(userMessage, finalResolvedThread);
+        }
+      } else if (currentStage === "sub_issue_resolution" && resolvedThread) {
+        await runSubIssueAndSuggestion(userMessage, resolvedThread);
+      } else {
+        const data = await postJson<ChatResponse>("http://localhost:8000/chat", {
+          message: userMessage,
+        });
 
         const classification = data.debug?.classification;
         const classificationConfidence =
@@ -170,11 +350,20 @@ words: ${data.debug?.word_count ?? 0}`;
         ]);
 
         if (data.selected_thread) {
-          setPendingSelectedThread(data.selected_thread);
-          setAwaitingReaction(true);
+          setSelectedThread(data.selected_thread);
+          setThemes(data.themes || []);
+          setResolvedThread(null);
+          setResolutionStatus(null);
+          setTriedThreads([]);
+          setTriedSubIssues([]);
+          setSubIssue(null);
+          setSuggestionTarget(null);
+          setChangeArea(null);
+          setSuggestionType(null);
+          setCurrentStage("awaiting_reaction");
         } else {
-          setPendingSelectedThread(null);
-          setAwaitingReaction(false);
+          setSelectedThread(null);
+          setCurrentStage("initial");
         }
       }
     } catch (error) {
@@ -185,8 +374,8 @@ words: ${data.debug?.word_count ?? 0}`;
           text: "Error: could not connect to backend.",
         },
       ]);
-      setAwaitingReaction(false);
-      setPendingSelectedThread(null);
+      setCurrentStage("initial");
+      setSelectedThread(null);
     } finally {
       setLoading(false);
     }
@@ -201,9 +390,7 @@ words: ${data.debug?.word_count ?? 0}`;
         </p>
 
         <div className="mb-3 text-xs text-gray-500">
-          mode: {awaitingReaction && pendingSelectedThread
-            ? `awaiting reaction to ${pendingSelectedThread}`
-            : "awaiting initial day message"}
+          mode: {currentStage}
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
@@ -236,7 +423,7 @@ words: ${data.debug?.word_count ?? 0}`;
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              awaitingReaction
+              currentStage === "awaiting_reaction"
                 ? "Reply to the assistant's hypothesis..."
                 : "Type a message..."
             }
