@@ -156,17 +156,23 @@ def resolve_thread(
 
     reaction = (reaction or "").strip().lower()
 
-    if reaction == "accept":
+    selected_history = [selected_thread] if selected_thread else []
+    updated_tried_threads = _dedupe([*tried_threads, *selected_history])
+
+    if reaction in {"accept", "agree"}:
         resolved_thread = selected_thread
         return {
             "resolved": True,
             "resolved_thread": resolved_thread,
             "next_thread": resolved_thread,
+            "resolution_status": "resolved",
+            "next_question": None,
+            "tried_threads": updated_tried_threads,
             "reaction_status": "accepted",
             "response": _build_accept_response(resolved_thread) if resolved_thread else (
                 "That makes sense. We can stay with that and narrow it down a bit more."
             ),
-            "notes": "User accepted the initial hypothesis thread.",
+            "notes": ["User accepted/agreed with the current hypothesis thread."],
             "candidate_threads": candidates,
         }
 
@@ -177,18 +183,38 @@ def resolve_thread(
             exclude=selected_thread,
         )
 
+        if alternative_thread:
+            return {
+                "resolved": False,
+                "resolved_thread": None,
+                "next_thread": alternative_thread,
+                "resolution_status": "retry_with_new_thread",
+                "next_question": None,
+                "tried_threads": updated_tried_threads,
+                "reaction_status": "rejected",
+                "response": _build_reject_response(alternative_thread, selected_thread),
+                "notes": [
+                    "User rejected the initial hypothesis.",
+                    "Switching to another plausible thread for confirmation.",
+                ],
+                "candidate_threads": candidates,
+            }
+
         return {
-            "resolved": alternative_thread is not None,
-            "resolved_thread": alternative_thread,
-            "next_thread": alternative_thread,
+            "resolved": False,
+            "resolved_thread": None,
+            "next_thread": None,
+            "resolution_status": "needs_clarification",
+            "next_question": (
+                "Thanks, that helps. Which area feels closer right now: sleep/rest, work/study, "
+                "daily structure, physical activity, or meals?"
+            ),
+            "tried_threads": updated_tried_threads,
             "reaction_status": "rejected",
             "response": _build_reject_response(alternative_thread, selected_thread),
-            "notes": (
-                "User rejected the initial hypothesis. "
-                "Switched to next plausible thread."
-                if alternative_thread
-                else "User rejected the initial hypothesis and no strong alternative thread was available."
-            ),
+            "notes": [
+                "User rejected the initial hypothesis and no strong alternative thread was available."
+            ],
             "candidate_threads": candidates,
         }
 
@@ -199,15 +225,36 @@ def resolve_thread(
             exclude=selected_thread,
         )
 
+        if resolved_thread:
+            return {
+                "resolved": False,
+                "resolved_thread": None,
+                "next_thread": resolved_thread,
+                "resolution_status": "retry_with_new_thread",
+                "next_question": None,
+                "tried_threads": updated_tried_threads,
+                "reaction_status": "redirected",
+                "response": _build_redirect_response(resolved_thread),
+                "notes": [
+                    "User redirected away from original thread.",
+                    "Switching focus and requesting confirmation on redirected thread.",
+                ],
+                "candidate_threads": candidates,
+            }
+
         return {
-            "resolved": resolved_thread is not None,
-            "resolved_thread": resolved_thread,
-            "next_thread": resolved_thread,
-            "reaction_status": "redirected",
-            "response": _build_redirect_response(resolved_thread) if resolved_thread else (
-                "Yeah, that makes sense. We can shift focus a bit and see what fits better."
+            "resolved": False,
+            "resolved_thread": None,
+            "next_thread": None,
+            "resolution_status": "needs_clarification",
+            "next_question": (
+                "Got it. What does it feel more related to right now? "
+                "Sleep/rest, work/study, routine, activity, or meals?"
             ),
-            "notes": "User redirected away from the original thread.",
+            "tried_threads": updated_tried_threads,
+            "reaction_status": "redirected",
+            "response": "Yeah, that makes sense. We can shift focus a bit and see what fits better.",
+            "notes": ["User redirected but no clear supported target was detected."],
             "candidate_threads": candidates,
         }
 
@@ -222,9 +269,14 @@ def resolve_thread(
             "resolved": False,
             "resolved_thread": None,
             "next_thread": None,
+            "resolution_status": "needs_clarification",
+            "next_question": _build_unsure_response(selected_thread, secondary_thread),
+            "tried_threads": updated_tried_threads,
             "reaction_status": "unsure",
             "response": _build_unsure_response(selected_thread, secondary_thread),
-            "notes": "User was unsure, so the system kept the conversation exploratory and offered soft possibilities.",
+            "notes": [
+                "User was unsure, so the system kept the conversation exploratory and offered soft possibilities."
+            ],
             "candidate_threads": candidates,
             "suggested_threads": _dedupe([selected_thread, secondary_thread]),
         }
@@ -233,10 +285,15 @@ def resolve_thread(
         "resolved": False,
         "resolved_thread": None,
         "next_thread": None,
+        "resolution_status": "needs_clarification",
+        "next_question": (
+            "I’m not fully sure which direction fits best yet. Which area feels closest right now?"
+        ),
+        "tried_threads": updated_tried_threads,
         "reaction_status": "unknown",
         "response": (
             "I’m not fully sure which direction fits best yet, so we can keep it open and work through it gradually."
         ),
-        "notes": "Fallback branch used because reaction was unknown.",
+        "notes": ["Fallback branch used because reaction was unknown."],
         "candidate_threads": candidates,
     }

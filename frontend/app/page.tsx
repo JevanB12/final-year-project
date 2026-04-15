@@ -194,6 +194,32 @@ export default function Home() {
   const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
   const [conversationComplete, setConversationComplete] = useState(false);
 
+  const postJson = async <T,>(url: string, payload: unknown): Promise<T> => {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const raw = await response.text();
+
+    if (!response.ok) {
+      throw new Error(
+        `Backend error ${response.status} at ${url}: ${raw || response.statusText}`
+      );
+    }
+
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      throw new Error(
+        `Backend returned invalid JSON at ${url}: ${raw.slice(0, 200) || "<empty>"}`
+      );
+    }
+  };
+
   const resetFlowState = () => {
     setAwaitingReaction(false);
     setPendingSelectedThread(null);
@@ -211,20 +237,15 @@ export default function Home() {
     userMessage: string,
     activeResolvedThread: string
   ) => {
-    const subIssueResponse = await fetch("http://localhost:8000/resolve-sub-issue", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const subIssueData = await postJson<SubIssueResolutionResponse>(
+      "http://localhost:8000/resolve-sub-issue",
+      {
         resolved_thread: activeResolvedThread,
         user_text: userMessage,
         tried_sub_issues: triedSubIssues,
         candidate_sub_issues: candidateSubIssues,
-      }),
-    });
-
-    const subIssueData: SubIssueResolutionResponse = await subIssueResponse.json();
+      }
+    );
 
     const subIssueMeta = `resolved: ${String(subIssueData.resolved)}
 sub_issue: ${subIssueData.sub_issue || "none"}
@@ -263,18 +284,13 @@ notes: ${subIssueData.notes?.join(" | ") || "none"}`;
     setSubIssue(subIssueData.sub_issue);
     setAwaitingSubIssue(false);
 
-    const suggestionResponse = await fetch("http://localhost:8000/map-suggestion", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const suggestionData = await postJson<SuggestionMapResponse>(
+      "http://localhost:8000/map-suggestion",
+      {
         resolved_thread: activeResolvedThread,
         sub_issue: subIssueData.sub_issue,
-      }),
-    });
-
-    const suggestionData: SuggestionMapResponse = await suggestionResponse.json();
+      }
+    );
 
     const suggestionMeta = `suggestion_target: ${suggestionData.suggestion_target || "none"}
 change_area: ${suggestionData.change_area || "none"}
@@ -293,20 +309,15 @@ notes: ${suggestionData.notes?.join(" | ") || "none"}`;
 
     setSuggestionTarget(suggestionData.suggestion_target);
 
-    const actionResponse = await fetch("http://localhost:8000/generate-action", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    const actionData = await postJson<ActionGenerationResponse>(
+      "http://localhost:8000/generate-action",
+      {
         resolved_thread: activeResolvedThread,
         sub_issue: subIssueData.sub_issue,
         suggestion_target: suggestionData.suggestion_target,
         user_text: userMessage,
-      }),
-    });
-
-    const actionData: ActionGenerationResponse = await actionResponse.json();
+      }
+    );
 
     const actionMeta = `action_label: ${actionData.action_label || "none"}
 action_text: ${actionData.action_text || "none"}
@@ -365,18 +376,13 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
       if (awaitingSubIssue && resolvedThread) {
         await runSubIssueSuggestionAndAction(userMessage, resolvedThread);
       } else if (awaitingReaction && pendingSelectedThread) {
-        const reactionResponse = await fetch("http://localhost:8000/classify-reaction", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+        const reactionData = await postJson<ReactionResponse>(
+          "http://localhost:8000/classify-reaction",
+          {
             reply: userMessage,
             selected_thread: pendingSelectedThread,
-          }),
-        });
-
-        const reactionData: ReactionResponse = await reactionResponse.json();
+          }
+        );
 
         const reactionMeta = `reaction: ${reactionData.reaction}
 confidence: ${reactionData.confidence.toFixed(2)}
@@ -407,21 +413,16 @@ notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | 
           },
         ]);
 
-        const resolutionResponse = await fetch("http://localhost:8000/resolve-thread", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
+        const threadData = await postJson<ThreadResolutionResponse>(
+          "http://localhost:8000/resolve-thread",
+          {
             selected_thread: pendingSelectedThread,
             reaction: reactionData.reaction,
             redirected_thread: reactionData.redirected_thread,
             themes,
             tried_threads: triedThreads,
-          }),
-        });
-
-        const threadData: ThreadResolutionResponse = await resolutionResponse.json();
+          }
+        );
 
         const threadMeta = `resolved: ${String(threadData.resolved)}
 resolved_thread: ${threadData.resolved_thread || "none"}
@@ -492,15 +493,9 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
           setPendingSelectedThread(null);
         }
       } else {
-        const response = await fetch("http://localhost:8000/chat", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ message: userMessage }),
+        const data = await postJson<ChatResponse>("http://localhost:8000/chat", {
+          message: userMessage,
         });
-
-        const data: ChatResponse = await response.json();
 
         const classification = data.debug?.classification;
         const classificationConfidence =
@@ -555,11 +550,21 @@ words: ${data.debug?.word_count ?? 0}`;
         }
       }
     } catch (error) {
+      console.error("Chat flow failed:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      const userFacingError = message.includes("Failed to fetch")
+        ? "Error: could not connect to backend (network/CORS)."
+        : message.startsWith("Backend error")
+        ? `Error: ${message}`
+        : message.startsWith("Backend returned invalid JSON")
+        ? `Error: ${message}`
+        : "Error: frontend failed while processing backend response.";
+
       setMessages((prev) => [
         ...prev,
         {
           sender: "assistant",
-          text: "Error: could not connect to backend.",
+          text: userFacingError,
         },
       ]);
       setAwaitingReaction(false);
