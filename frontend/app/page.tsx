@@ -138,6 +138,25 @@ export default function Home() {
     return response.json() as Promise<T>;
   };
 
+  const getThreadRetryPrompt = (thread: string) => {
+    const prompts: Record<string, string> = {
+      sleep_rest:
+        "Got you — then it might be more to do with tiredness or rest. Do you think low energy or rest has been a main part of how the day's felt?",
+      work_study_routine:
+        "Got you — then it might be more to do with work or study pressure. Does that feel closer to the main issue?",
+      daily_structure:
+        "Got you — then it might be more about how the day is structured. Does it feel like routine or day structure has been the bigger issue?",
+      meals_regularity:
+        "Got you — then it might be more connected to eating regularly or meal timing. Does that feel closer?",
+      physical_activity:
+        "Got you — then it might be more connected to movement or activity levels. Does that feel like a better fit?",
+    };
+    return (
+      prompts[thread] ||
+      "Got you — let's try a different angle. Does this direction feel closer to the main issue?"
+    );
+  };
+
   const runSubIssueAndSuggestion = async (
     latestUserMessage: string,
     threadToUse: string
@@ -355,6 +374,23 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
         setResolutionStatus(threadData.resolution_status || null);
 
         if (!threadData.resolved) {
+          if (
+            threadData.resolution_status === "retry_with_new_thread" &&
+            threadData.next_thread
+          ) {
+            const retryThread = threadData.next_thread;
+            setSelectedThread(retryThread);
+            setCurrentStage("awaiting_reaction");
+            setMessages((prev) => [
+              ...prev,
+              {
+                sender: "assistant",
+                text: getThreadRetryPrompt(retryThread),
+              },
+            ]);
+            return;
+          }
+
           setCurrentStage("thread_resolution");
           if (threadData.next_thread) {
             setSelectedThread(threadData.next_thread);
