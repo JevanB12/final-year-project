@@ -234,22 +234,89 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
     matched = []
     selected_terms = THREAD_KEYWORDS.get(selected_thread, set())
 
-    for term in selected_terms:
-        if f"not {term}" in text:
-            score += 1
-            matched.append(f"not {term}")
-        if f"{term} has been fine" in text or f"{term} been fine" in text:
-            score += 2
-            matched.append(f"{term} has been fine")
+    negators = {
+        "not",
+        "isnt",
+        "isn't",
+        "wasnt",
+        "wasn't",
+        "dont",
+        "don't",
+        "not really",
+        "not the",
+    }
 
-    downplay_phrases = {"not really", "dont think", "don't think", "not the issue", "fine"}
+    # Direct negation of selected-thread terms
+    for term in selected_terms:
+        normalized_term = term.strip()
+
+        if not normalized_term:
+            continue
+
+        # Exact and near-exact negation patterns
+        patterns = [
+            f"not {normalized_term}",
+            f"not really {normalized_term}",
+            f"don't think it's {normalized_term}",
+            f"dont think its {normalized_term}",
+            f"it's not {normalized_term}",
+            f"its not {normalized_term}",
+            f"{normalized_term} has been fine",
+            f"{normalized_term} been fine",
+        ]
+
+        for pattern in patterns:
+            if pattern in text:
+                score += 2
+                matched.append(pattern)
+
+        # Catch phrases like "not low energy", "not tired", "not exhausted"
+        words = normalized_term.split()
+        if words:
+            first_word = words[0]
+            if f"not {first_word}" in text and normalized_term in text:
+                score += 2
+                matched.append(f"not {normalized_term}")
+
+    # More general rejection / downplay cues
+    downplay_phrases = {
+        "not really",
+        "dont think",
+        "don't think",
+        "not the issue",
+        "that's not it",
+        "thats not it",
+        "fine",
+        "been fine",
+        "has been fine",
+    }
+
     for phrase in downplay_phrases:
         if phrase in text:
             score += 1
             matched.append(phrase)
 
-    return score, sorted(set(matched))
+    # Strong special-case handling for sleep/energy wording
+    if selected_thread == "sleep_rest":
+        sleep_downplays = [
+            "not low energy",
+            "not tired",
+            "not exhausted",
+            "sleep has been fine",
+            "my sleep has been fine",
+            "sleep has been good",
+            "my sleep has been good",
+            "rest has been fine",
+            "not really sleep",
+            "dont think its sleep",
+            "don't think it's sleep",
+        ]
+        for phrase in sleep_downplays:
+            if phrase in text:
+                score += 3
+                matched.append(phrase)
 
+    return score, sorted(set(matched))
 
 def _soft_agree_with_current_thread(
     text: str,
