@@ -54,6 +54,7 @@ class SubIssueResolutionPayload(BaseModel):
     resolved_thread: str
     user_text: str
     tried_sub_issues: List[str] = Field(default_factory=list)
+    candidate_sub_issues: List[str] = Field(default_factory=list)
 
 
 class SuggestionMapPayload(BaseModel):
@@ -151,6 +152,7 @@ def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
         resolved_thread=payload.resolved_thread,
         user_text=payload.user_text,
         tried_sub_issues=payload.tried_sub_issues,
+        candidate_sub_issues=payload.candidate_sub_issues,
     )
 
 

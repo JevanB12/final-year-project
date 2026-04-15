@@ -415,10 +415,83 @@ def _leaning_signal_score(text: str, cues: Set[str]) -> int:
     return score
 
 
+def _resolve_from_comparison_candidates(
+    text: str,
+    keywords: Dict[str, Set[str]],
+    candidate_sub_issues: List[str],
+) -> Dict:
+    a, b = candidate_sub_issues[0], candidate_sub_issues[1]
+    a_cues = keywords.get(a, set())
+    b_cues = keywords.get(b, set())
+
+    a_direct = sum(1 for cue in a_cues if cue in text)
+    b_direct = sum(1 for cue in b_cues if cue in text)
+    a_lean = _leaning_signal_score(text, a_cues)
+    b_lean = _leaning_signal_score(text, b_cues)
+    has_uncertainty = _has_any_phrase(text, UNCERTAIN_PHRASES)
+
+    base_out: Dict = {
+        "sub_issue": None,
+        "resolved": False,
+        "sub_issue_status": "needs_clarification",
+        "next_question": _comparison_question(a, b),
+        "candidate_sub_issues": [a, b],
+        "notes": [
+            "Comparison-constrained mode active.",
+            f"Comparison scores: {a} direct={a_direct}, lean={a_lean}; {b} direct={b_direct}, lean={b_lean}.",
+        ],
+    }
+
+    # Strong/direct pick in the constrained pair.
+    if (a_direct > b_direct and a_direct > 0) or (a_direct > 0 and b_direct == 0 and a_lean >= b_lean):
+        base_out["sub_issue"] = a
+        base_out["resolved"] = True
+        base_out["sub_issue_status"] = "confirmed"
+        base_out["candidate_sub_issues"] = [a]
+        base_out["next_question"] = None
+        base_out["notes"].append("Resolved from comparison choice.")
+        return base_out
+
+    if (b_direct > a_direct and b_direct > 0) or (b_direct > 0 and a_direct == 0 and b_lean >= a_lean):
+        base_out["sub_issue"] = b
+        base_out["resolved"] = True
+        base_out["sub_issue_status"] = "confirmed"
+        base_out["candidate_sub_issues"] = [b]
+        base_out["next_question"] = None
+        base_out["notes"].append("Resolved from comparison choice.")
+        return base_out
+
+    # Leaning pick in the constrained pair.
+    if a_lean > b_lean and a_lean > 0:
+        base_out["sub_issue"] = a
+        base_out["resolved"] = True
+        base_out["sub_issue_status"] = "confirmed"
+        base_out["candidate_sub_issues"] = [a]
+        base_out["next_question"] = None
+        base_out["notes"].append("Resolved from leaning comparison match.")
+        return base_out
+
+    if b_lean > a_lean and b_lean > 0:
+        base_out["sub_issue"] = b
+        base_out["resolved"] = True
+        base_out["sub_issue_status"] = "confirmed"
+        base_out["candidate_sub_issues"] = [b]
+        base_out["next_question"] = None
+        base_out["notes"].append("Resolved from leaning comparison match.")
+        return base_out
+
+    if has_uncertainty:
+        base_out["notes"].append("Ambiguous or uncertain comparison answer; requesting clarification.")
+    else:
+        base_out["notes"].append("No clear comparison preference detected; requesting clarification.")
+    return base_out
+
+
 def resolve_sub_issue(
     resolved_thread: str,
     user_text: str,
     tried_sub_issues: List[str],
+    candidate_sub_issues: List[str] = None,
 ) -> Dict:
     text = normalize_text(user_text)
     tried_set = set(tried_sub_issues)
@@ -439,6 +512,19 @@ def resolve_sub_issue(
             "Which part of that feels strongest for you right now — sleep, work or study, "
             "daily routine, meals, or movement?"
         )
+        return base_out
+
+    valid_candidates = [
+        sid for sid in (candidate_sub_issues or []) if sid in keywords and sid not in tried_set
+    ]
+    if len(valid_candidates) == 2:
+        constrained = _resolve_from_comparison_candidates(text, keywords, valid_candidates)
+        base_out["sub_issue"] = constrained["sub_issue"]
+        base_out["resolved"] = constrained["resolved"]
+        base_out["sub_issue_status"] = constrained["sub_issue_status"]
+        base_out["next_question"] = constrained["next_question"]
+        base_out["candidate_sub_issues"] = constrained["candidate_sub_issues"]
+        base_out["notes"].extend(constrained["notes"])
         return base_out
 
     base_out["notes"].extend(_notes_for_hits(text, keywords, tried_set))

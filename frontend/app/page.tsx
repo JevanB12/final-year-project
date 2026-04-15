@@ -117,6 +117,7 @@ export default function Home() {
   const [resolvedThread, setResolvedThread] = useState<string | null>(null);
   const [resolutionStatus, setResolutionStatus] = useState<string | null>(null);
   const [triedSubIssues, setTriedSubIssues] = useState<string[]>([]);
+  const [candidateSubIssues, setCandidateSubIssues] = useState<string[]>([]);
   const [subIssue, setSubIssue] = useState<string | null>(null);
   const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
   const [changeArea, setChangeArea] = useState<string | null>(null);
@@ -147,6 +148,7 @@ export default function Home() {
         resolved_thread: threadToUse,
         user_text: latestUserMessage,
         tried_sub_issues: triedSubIssues,
+        candidate_sub_issues: candidateSubIssues,
       }
     );
 
@@ -169,6 +171,7 @@ notes: ${subIssueData.notes?.join(" | ") || "none"}`;
 
     const nextTriedSubIssues = subIssueData.tried_sub_issues ?? triedSubIssues;
     setTriedSubIssues(nextTriedSubIssues);
+    setCandidateSubIssues(subIssueData.candidate_sub_issues ?? []);
 
     if (!subIssueData.resolved) {
       setCurrentStage("sub_issue_resolution");
@@ -183,6 +186,7 @@ notes: ${subIssueData.notes?.join(" | ") || "none"}`;
 
     const resolvedSubIssue = subIssueData.sub_issue || null;
     setSubIssue(resolvedSubIssue);
+    setCandidateSubIssues([]);
 
     const suggestionData = await postJson<SuggestionMapResponse>(
       "http://localhost:8000/map-suggestion",
@@ -420,6 +424,7 @@ words: ${data.debug?.word_count ?? 0}`;
           setResolutionStatus(null);
           setTriedThreads([]);
           setTriedSubIssues([]);
+          setCandidateSubIssues([]);
           setSubIssue(null);
           setSuggestionTarget(null);
           setChangeArea(null);
