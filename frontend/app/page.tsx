@@ -38,17 +38,28 @@ type ReactionResponse = {
     redirect: string[];
     unsure: string[];
   };
-  debug: {
-    agree_score: number;
-    reject_score: number;
-    redirect_score: number;
-    unsure_score: number;
-    found_known_thread_terms: string[];
-    found_unknown_redirect_cue: boolean;
-    notes: string[];
+  notes?: string[];
+  debug?: {
+    agree_score?: number;
+    reject_score?: number;
+    redirect_score?: number;
+    unsure_score?: number;
+    found_known_thread_terms?: string[];
+    found_unknown_redirect_cue?: boolean;
+    notes?: string[];
     normalized_text?: string;
     selected_thread?: string;
   };
+};
+
+type ThreadResolutionResponse = {
+  resolved_thread: string | null;
+  next_thread: string | null;
+  resolved: boolean;
+  resolution_status: string;
+  next_question: string | null;
+  tried_threads: string[];
+  notes: string[];
 };
 
 type Message = {
@@ -56,6 +67,23 @@ type Message = {
   text: string;
   meta?: string;
 };
+
+function threadPrompt(thread: string | null): string {
+  switch (thread) {
+    case "sleep_rest":
+      return "Got you — then it might be more to do with tiredness or rest. Do you think low energy or rest has been a main part of how the day’s felt?";
+    case "work_study_routine":
+      return "Got you — then it might be more to do with work or study pressure. Does that feel closer to the main issue?";
+    case "daily_structure":
+      return "Got you — then it might be more about how the day is structured. Does it feel like routine or day structure has been the bigger issue?";
+    case "meals_regularity":
+      return "Got you — then it might be more connected to eating regularly or meal timing. Does that feel closer?";
+    case "physical_activity":
+      return "Got you — then it might be more connected to movement or activity levels. Does that feel like a better fit?";
+    default:
+      return "Which area feels closest to the main issue right now?";
+  }
+}
 
 export default function Home() {
   const [input, setInput] = useState("");
@@ -69,6 +97,8 @@ export default function Home() {
 
   const [awaitingReaction, setAwaitingReaction] = useState(false);
   const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
+  const [themes, setThemes] = useState<string[]>([]);
+  const [triedThreads, setTriedThreads] = useState<string[]>([]);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -80,7 +110,7 @@ export default function Home() {
 
     try {
       if (awaitingReaction && pendingSelectedThread) {
-        const response = await fetch("http://localhost:8000/classify-reaction", {
+        const reactionResponse = await fetch("http://localhost:8000/classify-reaction", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -91,39 +121,109 @@ export default function Home() {
           }),
         });
 
-        const data: ReactionResponse = await response.json();
+        const reactionData: ReactionResponse = await reactionResponse.json();
 
-        const meta = `reaction: ${data.reaction}
-confidence: ${data.confidence.toFixed(2)}
-selected_thread: ${data.selected_thread || pendingSelectedThread || "none"}
-redirected_thread: ${data.redirected_thread || "none"}
-redirected_text: ${data.redirected_text || "none"}
-redirect_supported: ${String(data.redirect_supported)}
+        const reactionMeta = `reaction: ${reactionData.reaction}
+confidence: ${reactionData.confidence.toFixed(2)}
+selected_thread: ${reactionData.selected_thread || pendingSelectedThread || "none"}
+redirected_thread: ${reactionData.redirected_thread || "none"}
+redirected_text: ${reactionData.redirected_text || "none"}
+redirect_supported: ${String(reactionData.redirect_supported)}
 
-matched_signals.agree: ${data.matched_signals?.agree?.join(", ") || "none"}
-matched_signals.reject: ${data.matched_signals?.reject?.join(", ") || "none"}
-matched_signals.redirect: ${data.matched_signals?.redirect?.join(", ") || "none"}
-matched_signals.unsure: ${data.matched_signals?.unsure?.join(", ") || "none"}
+matched_signals.agree: ${reactionData.matched_signals?.agree?.join(", ") || "none"}
+matched_signals.reject: ${reactionData.matched_signals?.reject?.join(", ") || "none"}
+matched_signals.redirect: ${reactionData.matched_signals?.redirect?.join(", ") || "none"}
+matched_signals.unsure: ${reactionData.matched_signals?.unsure?.join(", ") || "none"}
 
-agree_score: ${data.debug?.agree_score ?? 0}
-reject_score: ${data.debug?.reject_score ?? 0}
-redirect_score: ${data.debug?.redirect_score ?? 0}
-unsure_score: ${data.debug?.unsure_score ?? 0}
-found_known_thread_terms: ${data.debug?.found_known_thread_terms?.join(", ") || "none"}
-found_unknown_redirect_cue: ${String(data.debug?.found_unknown_redirect_cue ?? false)}
-notes: ${data.debug?.notes?.join(" | ") || "none"}`;
+agree_score: ${reactionData.debug?.agree_score ?? 0}
+reject_score: ${reactionData.debug?.reject_score ?? 0}
+redirect_score: ${reactionData.debug?.redirect_score ?? 0}
+unsure_score: ${reactionData.debug?.unsure_score ?? 0}
+found_known_thread_terms: ${reactionData.debug?.found_known_thread_terms?.join(", ") || "none"}
+found_unknown_redirect_cue: ${String(reactionData.debug?.found_unknown_redirect_cue ?? false)}
+notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | ") || "none"}`;
 
         setMessages((prev) => [
           ...prev,
           {
             sender: "assistant",
-            text: `Iteration 4 classification: ${data.reaction}`,
-            meta,
+            text: `Iteration 4 classification: ${reactionData.reaction}`,
+            meta: reactionMeta,
           },
         ]);
 
-        setAwaitingReaction(false);
-        setPendingSelectedThread(null);
+        const resolutionResponse = await fetch("http://localhost:8000/resolve-thread", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            selected_thread: pendingSelectedThread,
+            reaction: reactionData.reaction,
+            redirected_thread: reactionData.redirected_thread,
+            themes,
+            tried_threads: triedThreads,
+          }),
+        });
+
+        const threadData: ThreadResolutionResponse = await resolutionResponse.json();
+
+        const threadMeta = `resolved: ${String(threadData.resolved)}
+resolved_thread: ${threadData.resolved_thread || "none"}
+next_thread: ${threadData.next_thread || "none"}
+resolution_status: ${threadData.resolution_status || "none"}
+next_question: ${threadData.next_question || "none"}
+tried_threads: ${threadData.tried_threads?.join(", ") || "none"}
+notes: ${threadData.notes?.join(" | ") || "none"}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "assistant",
+            text: `Iteration 5: thread resolution`,
+            meta: threadMeta,
+          },
+        ]);
+
+        setTriedThreads(threadData.tried_threads || []);
+
+        if (threadData.resolved && threadData.resolved_thread) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "assistant",
+              text: `Resolved thread: ${threadData.resolved_thread}`,
+            },
+          ]);
+          setAwaitingReaction(false);
+          setPendingSelectedThread(null);
+        } else if (
+          threadData.resolution_status === "retry_with_new_thread" &&
+          threadData.next_thread
+        ) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "assistant",
+              text: threadPrompt(threadData.next_thread),
+            },
+          ]);
+          setPendingSelectedThread(threadData.next_thread);
+          setAwaitingReaction(true);
+        } else if (threadData.next_question) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "assistant",
+              text: threadData.next_question,
+            },
+          ]);
+          setPendingSelectedThread(threadData.next_thread || pendingSelectedThread);
+          setAwaitingReaction(true);
+        } else {
+          setAwaitingReaction(false);
+          setPendingSelectedThread(null);
+        }
       } else {
         const response = await fetch("http://localhost:8000/chat", {
           method: "POST",
@@ -168,6 +268,9 @@ words: ${data.debug?.word_count ?? 0}`;
             meta,
           },
         ]);
+
+        setThemes(data.themes || []);
+        setTriedThreads([]);
 
         if (data.selected_thread) {
           setPendingSelectedThread(data.selected_thread);
