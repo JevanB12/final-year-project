@@ -51,50 +51,6 @@ type ReactionResponse = {
   };
 };
 
-type ThreadResolutionResponse = {
-  resolved?: boolean;
-  resolved_thread?: string | null;
-  next_thread?: string | null;
-  resolution_status?: string | null;
-  next_question?: string | null;
-  tried_threads?: string[];
-  notes?: string[];
-};
-
-type SubIssueResolutionResponse = {
-  resolved?: boolean;
-  sub_issue?: string | null;
-  sub_issue_status?: string | null;
-  next_question?: string | null;
-  candidate_sub_issues?: string[];
-  tried_sub_issues?: string[];
-  notes?: string[];
-};
-
-type SuggestionMapResponse = {
-  suggestion_target?: string | null;
-  change_area?: string | null;
-  suggestion_type?: string | null;
-  confidence?: number;
-  notes?: string[];
-};
-
-type ActionGenerationResponse = {
-  action_label?: string | null;
-  action_text?: string | null;
-  follow_up_question?: string | null;
-  confidence?: number;
-  notes?: string[];
-};
-
-type Stage =
-  | "initial"
-  | "awaiting_reaction"
-  | "thread_resolution"
-  | "sub_issue_resolution"
-  | "suggestion_mapped"
-  | "action_generated";
-
 type Message = {
   sender: "user" | "assistant";
   text: string;
@@ -111,188 +67,8 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
 
-  const [selectedThread, setSelectedThread] = useState<string | null>(null);
-  const [themes, setThemes] = useState<string[]>([]);
-  const [triedThreads, setTriedThreads] = useState<string[]>([]);
-  const [resolvedThread, setResolvedThread] = useState<string | null>(null);
-  const [resolutionStatus, setResolutionStatus] = useState<string | null>(null);
-  const [triedSubIssues, setTriedSubIssues] = useState<string[]>([]);
-  const [candidateSubIssues, setCandidateSubIssues] = useState<string[]>([]);
-  const [subIssue, setSubIssue] = useState<string | null>(null);
-  const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
-  const [changeArea, setChangeArea] = useState<string | null>(null);
-  const [suggestionType, setSuggestionType] = useState<string | null>(null);
-  const [actionLabel, setActionLabel] = useState<string | null>(null);
-  const [actionText, setActionText] = useState<string | null>(null);
-  const [followUpQuestion, setFollowUpQuestion] = useState<string | null>(null);
-  const [currentStage, setCurrentStage] = useState<Stage>("initial");
-
-  const postJson = async <T,>(url: string, body: Record<string, unknown>): Promise<T> => {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
-    return response.json() as Promise<T>;
-  };
-
-  const getThreadRetryPrompt = (thread: string) => {
-    const prompts: Record<string, string> = {
-      sleep_rest:
-        "Got you — then it might be more to do with tiredness or rest. Do you think low energy or rest has been a main part of how the day's felt?",
-      work_study_routine:
-        "Got you — then it might be more to do with work or study pressure. Does that feel closer to the main issue?",
-      daily_structure:
-        "Got you — then it might be more about how the day is structured. Does it feel like routine or day structure has been the bigger issue?",
-      meals_regularity:
-        "Got you — then it might be more connected to eating regularly or meal timing. Does that feel closer?",
-      physical_activity:
-        "Got you — then it might be more connected to movement or activity levels. Does that feel like a better fit?",
-    };
-    return (
-      prompts[thread] ||
-      "Got you — let's try a different angle. Does this direction feel closer to the main issue?"
-    );
-  };
-
-  const runSubIssueAndSuggestion = async (
-    latestUserMessage: string,
-    threadToUse: string
-  ) => {
-    const subIssueData = await postJson<SubIssueResolutionResponse>(
-      "http://localhost:8000/resolve-sub-issue",
-      {
-        resolved_thread: threadToUse,
-        user_text: latestUserMessage,
-        tried_sub_issues: triedSubIssues,
-        candidate_sub_issues: candidateSubIssues,
-      }
-    );
-
-    const subIssueMeta = `resolved: ${String(subIssueData.resolved ?? false)}
-sub_issue: ${subIssueData.sub_issue || "none"}
-sub_issue_status: ${subIssueData.sub_issue_status || "none"}
-next_question: ${subIssueData.next_question || "none"}
-candidate_sub_issues: ${subIssueData.candidate_sub_issues?.join(", ") || "none"}
-tried_sub_issues: ${subIssueData.tried_sub_issues?.join(", ") || "none"}
-notes: ${subIssueData.notes?.join(" | ") || "none"}`;
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "assistant",
-        text: "Iteration 6: sub-issue resolution",
-        meta: subIssueMeta,
-      },
-    ]);
-
-    const nextTriedSubIssues = subIssueData.tried_sub_issues ?? triedSubIssues;
-    setTriedSubIssues(nextTriedSubIssues);
-    setCandidateSubIssues(subIssueData.candidate_sub_issues ?? []);
-
-    if (!subIssueData.resolved) {
-      setCurrentStage("sub_issue_resolution");
-      if (subIssueData.next_question) {
-        setMessages((prev) => [
-          ...prev,
-          { sender: "assistant", text: subIssueData.next_question as string },
-        ]);
-      }
-      return;
-    }
-
-    const resolvedSubIssue = subIssueData.sub_issue || null;
-    setSubIssue(resolvedSubIssue);
-    setCandidateSubIssues([]);
-
-    const suggestionData = await postJson<SuggestionMapResponse>(
-      "http://localhost:8000/map-suggestion",
-      {
-        resolved_thread: threadToUse,
-        sub_issue: resolvedSubIssue,
-      }
-    );
-
-    const suggestionMeta = `suggestion_target: ${suggestionData.suggestion_target || "none"}
-change_area: ${suggestionData.change_area || "none"}
-suggestion_type: ${suggestionData.suggestion_type || "none"}
-confidence: ${typeof suggestionData.confidence === "number" ? suggestionData.confidence.toFixed(2) : "none"}
-notes: ${suggestionData.notes?.join(" | ") || "none"}`;
-
-    setSuggestionTarget(suggestionData.suggestion_target || null);
-    setChangeArea(suggestionData.change_area || null);
-    setSuggestionType(suggestionData.suggestion_type || null);
-    setCurrentStage("suggestion_mapped");
-
-    setMessages((prev) => [
-      ...prev,
-      {
-        sender: "assistant",
-        text: "Iteration 7: suggestion mapping",
-        meta: suggestionMeta,
-      },
-      {
-        sender: "assistant",
-        text: `Okay, it sounds like the main issue is around ${
-          suggestionData.change_area || "the next change area"
-        }.`,
-      },
-    ]);
-
-    const actionData = await postJson<ActionGenerationResponse>(
-      "http://localhost:8000/generate-action",
-      {
-        resolved_thread: threadToUse,
-        sub_issue: resolvedSubIssue || "",
-        suggestion_target: suggestionData.suggestion_target || "",
-        user_text: latestUserMessage,
-      }
-    );
-
-    const actionMeta = `action_label: ${actionData.action_label || "none"}
-action_text: ${actionData.action_text || "none"}
-follow_up_question: ${actionData.follow_up_question || "none"}
-confidence: ${typeof actionData.confidence === "number" ? actionData.confidence.toFixed(2) : "none"}
-notes: ${actionData.notes?.join(" | ") || "none"}`;
-
-    setActionLabel(actionData.action_label || null);
-    setActionText(actionData.action_text || null);
-    setFollowUpQuestion(actionData.follow_up_question || null);
-    setCurrentStage("action_generated");
-
-    const actionMessages: Message[] = [
-      {
-        sender: "assistant",
-        text: "Iteration 8: action generation",
-        meta: actionMeta,
-      },
-    ];
-
-    if (actionData.action_text) {
-      actionMessages.push({
-        sender: "assistant",
-        text: actionData.action_text,
-      });
-    }
-
-    if (actionData.follow_up_question) {
-      actionMessages.push({
-        sender: "assistant",
-        text: actionData.follow_up_question,
-      });
-    }
-
-    if (!actionData.action_text && !actionData.follow_up_question) {
-      actionMessages.push({
-        sender: "assistant",
-        text: "It may help to try one small, manageable adjustment in this area.",
-      });
-    }
-
-    setMessages((prev) => [...prev, ...actionMessages]);
-  };
+  const [awaitingReaction, setAwaitingReaction] = useState(false);
+  const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
@@ -303,121 +79,61 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
     setLoading(true);
 
     try {
-      if ((currentStage === "awaiting_reaction" || currentStage === "thread_resolution") && selectedThread) {
-        const reactionData = await postJson<ReactionResponse>(
-          "http://localhost:8000/classify-reaction",
-          {
+      if (awaitingReaction && pendingSelectedThread) {
+        const response = await fetch("http://localhost:8000/classify-reaction", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
             reply: userMessage,
-            selected_thread: selectedThread,
-          }
-        );
-
-        const reactionMeta = `reaction: ${reactionData.reaction}
-confidence: ${typeof reactionData.confidence === "number" ? reactionData.confidence.toFixed(2) : "none"}
-selected_thread: ${reactionData.selected_thread || selectedThread || "none"}
-redirected_thread: ${reactionData.redirected_thread || "none"}
-redirected_text: ${reactionData.redirected_text || "none"}
-redirect_supported: ${String(reactionData.redirect_supported)}
-
-matched_signals.agree: ${reactionData.matched_signals?.agree?.join(", ") || "none"}
-matched_signals.reject: ${reactionData.matched_signals?.reject?.join(", ") || "none"}
-matched_signals.redirect: ${reactionData.matched_signals?.redirect?.join(", ") || "none"}
-matched_signals.unsure: ${reactionData.matched_signals?.unsure?.join(", ") || "none"}
-
-agree_score: ${reactionData.debug?.agree_score ?? 0}
-reject_score: ${reactionData.debug?.reject_score ?? 0}
-redirect_score: ${reactionData.debug?.redirect_score ?? 0}
-unsure_score: ${reactionData.debug?.unsure_score ?? 0}
-found_known_thread_terms: ${reactionData.debug?.found_known_thread_terms?.join(", ") || "none"}
-found_unknown_redirect_cue: ${String(reactionData.debug?.found_unknown_redirect_cue ?? false)}
-notes: ${reactionData.debug?.notes?.join(" | ") || "none"}`;
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "assistant",
-            text: `Iteration 4 classification: ${reactionData.reaction || "unknown"}`,
-            meta: reactionMeta,
-          },
-        ]);
-
-        const threadData = await postJson<ThreadResolutionResponse>(
-          "http://localhost:8000/resolve-thread",
-          {
-            selected_thread: selectedThread,
-            reaction: reactionData.reaction,
-            redirected_thread: reactionData.redirected_thread,
-            themes,
-            tried_threads: triedThreads,
-          }
-        );
-
-        const threadMeta = `resolved: ${String(threadData.resolved ?? false)}
-resolved_thread: ${threadData.resolved_thread || "none"}
-next_thread: ${threadData.next_thread || "none"}
-resolution_status: ${threadData.resolution_status || "none"}
-next_question: ${threadData.next_question || "none"}
-tried_threads: ${threadData.tried_threads?.join(", ") || "none"}
-notes: ${threadData.notes?.join(" | ") || "none"}`;
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "assistant",
-            text: "Iteration 5: thread resolution",
-            meta: threadMeta,
-          },
-        ]);
-
-        const nextTriedThreads = threadData.tried_threads ?? triedThreads;
-        setTriedThreads(nextTriedThreads);
-        setResolutionStatus(threadData.resolution_status || null);
-
-        if (!threadData.resolved) {
-          if (
-            threadData.resolution_status === "retry_with_new_thread" &&
-            threadData.next_thread
-          ) {
-            const retryThread = threadData.next_thread;
-            setSelectedThread(retryThread);
-            setCurrentStage("awaiting_reaction");
-            setMessages((prev) => [
-              ...prev,
-              {
-                sender: "assistant",
-                text: getThreadRetryPrompt(retryThread),
-              },
-            ]);
-            return;
-          }
-
-          setCurrentStage("thread_resolution");
-          if (threadData.next_thread) {
-            setSelectedThread(threadData.next_thread);
-          }
-          if (threadData.next_question) {
-            setMessages((prev) => [
-              ...prev,
-              { sender: "assistant", text: threadData.next_question as string },
-            ]);
-          }
-          return;
-        }
-
-        const finalResolvedThread = threadData.resolved_thread || selectedThread;
-        setResolvedThread(finalResolvedThread);
-        setSelectedThread(threadData.next_thread || finalResolvedThread);
-        setCurrentStage("sub_issue_resolution");
-
-        if (finalResolvedThread) {
-          await runSubIssueAndSuggestion(userMessage, finalResolvedThread);
-        }
-      } else if (currentStage === "sub_issue_resolution" && resolvedThread) {
-        await runSubIssueAndSuggestion(userMessage, resolvedThread);
-      } else {
-        const data = await postJson<ChatResponse>("http://localhost:8000/chat", {
-          message: userMessage,
+            selected_thread: pendingSelectedThread,
+          }),
         });
+
+        const data: ReactionResponse = await response.json();
+
+        const meta = `reaction: ${data.reaction}
+confidence: ${data.confidence.toFixed(2)}
+selected_thread: ${data.selected_thread || pendingSelectedThread || "none"}
+redirected_thread: ${data.redirected_thread || "none"}
+redirected_text: ${data.redirected_text || "none"}
+redirect_supported: ${String(data.redirect_supported)}
+
+matched_signals.agree: ${data.matched_signals?.agree?.join(", ") || "none"}
+matched_signals.reject: ${data.matched_signals?.reject?.join(", ") || "none"}
+matched_signals.redirect: ${data.matched_signals?.redirect?.join(", ") || "none"}
+matched_signals.unsure: ${data.matched_signals?.unsure?.join(", ") || "none"}
+
+agree_score: ${data.debug?.agree_score ?? 0}
+reject_score: ${data.debug?.reject_score ?? 0}
+redirect_score: ${data.debug?.redirect_score ?? 0}
+unsure_score: ${data.debug?.unsure_score ?? 0}
+found_known_thread_terms: ${data.debug?.found_known_thread_terms?.join(", ") || "none"}
+found_unknown_redirect_cue: ${String(data.debug?.found_unknown_redirect_cue ?? false)}
+notes: ${data.debug?.notes?.join(" | ") || "none"}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "assistant",
+            text: `Iteration 4 classification: ${data.reaction}`,
+            meta,
+          },
+        ]);
+
+        setAwaitingReaction(false);
+        setPendingSelectedThread(null);
+      } else {
+        const response = await fetch("http://localhost:8000/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message: userMessage }),
+        });
+
+        const data: ChatResponse = await response.json();
 
         const classification = data.debug?.classification;
         const classificationConfidence =
@@ -454,24 +170,11 @@ words: ${data.debug?.word_count ?? 0}`;
         ]);
 
         if (data.selected_thread) {
-          setSelectedThread(data.selected_thread);
-          setThemes(data.themes || []);
-          setResolvedThread(null);
-          setResolutionStatus(null);
-          setTriedThreads([]);
-          setTriedSubIssues([]);
-          setCandidateSubIssues([]);
-          setSubIssue(null);
-          setSuggestionTarget(null);
-          setChangeArea(null);
-          setSuggestionType(null);
-          setActionLabel(null);
-          setActionText(null);
-          setFollowUpQuestion(null);
-          setCurrentStage("awaiting_reaction");
+          setPendingSelectedThread(data.selected_thread);
+          setAwaitingReaction(true);
         } else {
-          setSelectedThread(null);
-          setCurrentStage("initial");
+          setPendingSelectedThread(null);
+          setAwaitingReaction(false);
         }
       }
     } catch (error) {
@@ -482,8 +185,8 @@ words: ${data.debug?.word_count ?? 0}`;
           text: "Error: could not connect to backend.",
         },
       ]);
-      setCurrentStage("initial");
-      setSelectedThread(null);
+      setAwaitingReaction(false);
+      setPendingSelectedThread(null);
     } finally {
       setLoading(false);
     }
@@ -498,7 +201,9 @@ words: ${data.debug?.word_count ?? 0}`;
         </p>
 
         <div className="mb-3 text-xs text-gray-500">
-          mode: {currentStage}
+          mode: {awaitingReaction && pendingSelectedThread
+            ? `awaiting reaction to ${pendingSelectedThread}`
+            : "awaiting initial day message"}
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
@@ -531,7 +236,7 @@ words: ${data.debug?.word_count ?? 0}`;
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              currentStage === "awaiting_reaction"
+              awaitingReaction
                 ? "Reply to the assistant's hypothesis..."
                 : "Type a message..."
             }

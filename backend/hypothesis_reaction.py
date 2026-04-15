@@ -1,29 +1,14 @@
-def is_agree_with_explanation(reply_text: str, selected_thread: str, found_threads: list, agree_score: int) -> bool:
-    if agree_score == 0 or not selected_thread or not found_threads:
-        return False
-    text = reply_text.lower()
-    # Causal cues
-    causal_cues = ["because", "so", "to ", "which is why", "thats why", "that's why", "due to"]
-    if not any(cue in text for cue in causal_cues):
-        return False
-    # Selected thread must be mentioned or implied
-    if selected_thread not in text:
-        # For sleep_rest, allow 'sleep' as proxy
-        if selected_thread == "sleep_rest" and "sleep" not in text:
-            return False
-    # Special-case for sleep_rest: work/study as cause
-    if selected_thread == "sleep_rest":
-        sleep_phrases = [
-            "cut it short", "cut sleep short", "not getting enough sleep", "less sleep", "sleep less"
-        ]
-        if any(phrase in text for phrase in sleep_phrases):
-            work_terms = THREAD_KEYWORDS.get("work_study_routine", set())
-            if any(term in text for term in work_terms):
-                return True
-    # General: if another thread is mentioned and causal cue present, treat as agree+explanation
-    return True
 import re
 from typing import Dict, List, Optional
+
+
+SUPPORTED_THREADS = {
+    "sleep_rest",
+    "work_study_routine",
+    "physical_activity",
+    "meals_regularity",
+    "daily_structure",
+}
 
 POSITIVE_STATE_CUES = {
     "good",
@@ -33,25 +18,6 @@ POSITIVE_STATE_CUES = {
     "alright",
     "great",
     "better",
-}
-def _selected_positive_state_score(text: str, selected_thread: str) -> tuple[int, List[str]]:
-    score = 0
-    matched = []
-    selected_terms = THREAD_KEYWORDS.get(selected_thread, set())
-
-    for term in selected_terms:
-        for cue in POSITIVE_STATE_CUES:
-            if term in text and cue in text:
-                score += 2
-                matched.append(f"{term} + {cue}")
-    return score, sorted(set(matched))
-
-SUPPORTED_THREADS = {
-    "sleep_rest",
-    "work_study_routine",
-    "physical_activity",
-    "meals_regularity",
-    "daily_structure",
 }
 
 AGREE_CUES = {
@@ -112,6 +78,18 @@ REDIRECT_CUES = {
     "it's mainly",
 }
 
+LEANING_ACCEPT_CUES = {
+    "i guess",
+    "probably",
+    "maybe yeah",
+    "i think",
+    "seems like",
+    "might be",
+    "could be",
+    "tbf",
+    "to be fair",
+}
+
 THREAD_KEYWORDS = {
     "sleep_rest": {
         "sleep",
@@ -122,6 +100,11 @@ THREAD_KEYWORDS = {
         "exhausted",
         "drained",
         "fatigue",
+        "not sleeping properly",
+        "sleep hasn't been great",
+        "sleep hasnt been great",
+        "sleep hasn't been disciplined",
+        "sleep hasnt been disciplined",
     },
     "work_study_routine": {
         "work",
@@ -218,6 +201,19 @@ def _find_terms_for_thread(text: str, thread: str) -> List[str]:
     return sorted(found)
 
 
+def _selected_positive_state_score(text: str, selected_thread: str) -> tuple[int, List[str]]:
+    score = 0
+    matched = []
+    selected_terms = THREAD_KEYWORDS.get(selected_thread, set())
+
+    for term in selected_terms:
+        for cue in POSITIVE_STATE_CUES:
+            if _contains_phrase(text, term) and _contains_phrase(text, cue):
+                score += 2
+                matched.append(f"{term} + {cue}")
+    return score, sorted(set(matched))
+
+
 def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List[str]]:
     score = 0
     matched = []
@@ -238,6 +234,34 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
             matched.append(phrase)
 
     return score, sorted(set(matched))
+
+
+def _soft_agree_with_current_thread(
+    text: str,
+    selected_thread: str,
+    agree_score: int,
+    reject_score: int,
+    redirect_cue_score: int,
+    found_threads: List[str],
+) -> tuple[bool, List[str]]:
+    if not selected_thread:
+        return False, []
+
+    selected_terms = _find_terms_for_thread(text, selected_thread)
+    leaning_hits = [cue for cue in LEANING_ACCEPT_CUES if _contains_phrase(text, cue)]
+
+    if reject_score > 0:
+        return False, []
+    if redirect_cue_score > 0 and found_threads:
+        return False, []
+    if not selected_terms:
+        return False, []
+    if agree_score > 0:
+        return True, [f"current_thread:{term}" for term in selected_terms]
+    if leaning_hits:
+        return True, [*sorted(set(leaning_hits)), *[f"current_thread:{term}" for term in selected_terms]]
+
+    return False, []
 
 
 def detect_known_redirect_threads(reply_text: str, selected_thread: str) -> List[str]:
@@ -280,13 +304,41 @@ def extract_unsupported_redirect_text(reply_text: str, selected_thread: str, fou
         tail = text.split(marker, 1)[1].strip()
         if not tail:
             continue
-        # Keep it short and focused for logging unsupported redirect reason.
         candidate = " ".join(tail.split()[:8]).strip()
         generic = {"this", "that", "it", "everything", "nothing"}
         if candidate and candidate not in generic:
             return candidate
 
     return None
+
+
+def is_agree_with_explanation(reply_text: str, selected_thread: str, found_threads: list, agree_score: int) -> bool:
+    if agree_score == 0 or not selected_thread or not found_threads:
+        return False
+    text = reply_text.lower()
+
+    causal_cues = ["because", "so", "to ", "which is why", "thats why", "that's why", "due to"]
+    if not any(cue in text for cue in causal_cues):
+        return False
+
+    if selected_thread not in text:
+        if selected_thread == "sleep_rest" and "sleep" not in text:
+            return False
+
+    if selected_thread == "sleep_rest":
+        sleep_phrases = [
+            "cut it short",
+            "cut sleep short",
+            "not getting enough sleep",
+            "less sleep",
+            "sleep less",
+        ]
+        if any(phrase in text for phrase in sleep_phrases):
+            work_terms = THREAD_KEYWORDS.get("work_study_routine", set())
+            if any(term in text for term in work_terms):
+                return True
+
+    return True
 
 
 def _compute_confidence(primary_score: int, secondary_score: int, reaction: str) -> float:
@@ -322,7 +374,6 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     downplay_score, downplay_matches = _selected_downplay_score(normalized, selected_thread)
     positive_state_score, positive_state_matches = _selected_positive_state_score(normalized, selected_thread)
     unsupported_text = extract_unsupported_redirect_text(normalized, selected_thread, found_threads)
-    found_unknown_redirect_cue = unsupported_text is not None
 
     redirect_score = redirect_cue_score
     if found_threads:
@@ -339,13 +390,21 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     has_redirect_target = bool(found_threads) or bool(unsupported_text)
     move_away_signal = downplay_score > 0 or reject_score > 0 or redirect_cue_score > 0
 
+    soft_agree, soft_agree_matches = _soft_agree_with_current_thread(
+        text=normalized,
+        selected_thread=selected_thread,
+        agree_score=agree_score,
+        reject_score=reject_score,
+        redirect_cue_score=redirect_cue_score,
+        found_threads=found_threads,
+    )
+
     reaction = "unsure"
     redirected_thread: Optional[str] = None
     redirected_text: Optional[str] = None
     redirect_supported = False
 
     if has_redirect_target and move_away_signal:
-        # Check for agree+explanation before redirect
         if is_agree_with_explanation(reply_text, selected_thread, found_threads, agree_score):
             reaction = "agree"
             notes.append("User agreed with the selected thread and explained its cause.")
@@ -362,6 +421,9 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     elif reject_score > unsure_score and not has_redirect_target:
         reaction = "reject"
         notes.append("Rejection stronger than uncertainty.")
+    elif soft_agree:
+        reaction = "agree"
+        notes.append("User showed soft agreement with the current thread.")
     elif agree_score > 0 and reject_score == 0 and unsure_score == 0:
         reaction = "agree"
         notes.append("Agreement cues with no rejection or uncertainty cues.")
@@ -374,20 +436,15 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
 
     primary = max(agree_score, reject_score, redirect_score, unsure_score)
     secondary = sorted([agree_score, reject_score, redirect_score, unsure_score], reverse=True)[1]
-    confidence = _compute_confidence(primary, secondary, reaction)
 
     return {
         "reaction": reaction,
         "redirected_thread": redirected_thread,
         "redirected_text": redirected_text,
         "redirect_supported": redirect_supported,
-        "confidence": _compute_confidence(
-            max(agree_score, reject_score, unsure_score, redirect_score),
-            min(agree_score, reject_score, unsure_score, redirect_score),
-            reaction,
-        ),
+        "confidence": _compute_confidence(primary, secondary, reaction),
         "matched_signals": {
-            "agree": sorted(set(agree_matches)),
+            "agree": sorted(set(agree_matches + soft_agree_matches)),
             "reject": sorted(set(reject_matches + downplay_matches + positive_state_matches)),
             "redirect": sorted(set(redirect_cue_matches + found_terms)),
             "unsure": sorted(set(unsure_matches)),
