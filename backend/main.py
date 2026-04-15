@@ -20,6 +20,7 @@ from thread_resolution import resolve_thread
 from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
 from sub_issue_resolution import resolve_sub_issue
 from suggestion_mapper import map_suggestion_target
+from action_generator import generate_action
 
 app = FastAPI()
 
@@ -58,6 +59,13 @@ class SubIssueResolutionPayload(BaseModel):
 class SuggestionMapPayload(BaseModel):
     resolved_thread: str
     sub_issue: str
+
+
+class ActionGenerationPayload(BaseModel):
+    resolved_thread: str
+    sub_issue: str
+    suggestion_target: str
+    user_text: str = ""
 
 
 @app.post("/chat")
@@ -151,4 +159,14 @@ def map_suggestion_endpoint(payload: SuggestionMapPayload):
     return map_suggestion_target(
         resolved_thread=payload.resolved_thread,
         sub_issue=payload.sub_issue,
+    )
+
+
+@app.post("/generate-action")
+def generate_action_endpoint(payload: ActionGenerationPayload):
+    return generate_action(
+        resolved_thread=payload.resolved_thread,
+        sub_issue=payload.sub_issue,
+        suggestion_target=payload.suggestion_target,
+        user_text=payload.user_text,
     )

@@ -79,12 +79,21 @@ type SuggestionMapResponse = {
   notes?: string[];
 };
 
+type ActionGenerationResponse = {
+  action_label?: string | null;
+  action_text?: string | null;
+  follow_up_question?: string | null;
+  confidence?: number;
+  notes?: string[];
+};
+
 type Stage =
   | "initial"
   | "awaiting_reaction"
   | "thread_resolution"
   | "sub_issue_resolution"
-  | "suggestion_mapped";
+  | "suggestion_mapped"
+  | "action_generated";
 
 type Message = {
   sender: "user" | "assistant";
@@ -112,6 +121,9 @@ export default function Home() {
   const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
   const [changeArea, setChangeArea] = useState<string | null>(null);
   const [suggestionType, setSuggestionType] = useState<string | null>(null);
+  const [actionLabel, setActionLabel] = useState<string | null>(null);
+  const [actionText, setActionText] = useState<string | null>(null);
+  const [followUpQuestion, setFollowUpQuestion] = useState<string | null>(null);
   const [currentStage, setCurrentStage] = useState<Stage>("initial");
 
   const postJson = async <T,>(url: string, body: Record<string, unknown>): Promise<T> => {
@@ -205,6 +217,58 @@ notes: ${suggestionData.notes?.join(" | ") || "none"}`;
         }.`,
       },
     ]);
+
+    const actionData = await postJson<ActionGenerationResponse>(
+      "http://localhost:8000/generate-action",
+      {
+        resolved_thread: threadToUse,
+        sub_issue: resolvedSubIssue || "",
+        suggestion_target: suggestionData.suggestion_target || "",
+        user_text: latestUserMessage,
+      }
+    );
+
+    const actionMeta = `action_label: ${actionData.action_label || "none"}
+action_text: ${actionData.action_text || "none"}
+follow_up_question: ${actionData.follow_up_question || "none"}
+confidence: ${typeof actionData.confidence === "number" ? actionData.confidence.toFixed(2) : "none"}
+notes: ${actionData.notes?.join(" | ") || "none"}`;
+
+    setActionLabel(actionData.action_label || null);
+    setActionText(actionData.action_text || null);
+    setFollowUpQuestion(actionData.follow_up_question || null);
+    setCurrentStage("action_generated");
+
+    const actionMessages: Message[] = [
+      {
+        sender: "assistant",
+        text: "Iteration 8: action generation",
+        meta: actionMeta,
+      },
+    ];
+
+    if (actionData.action_text) {
+      actionMessages.push({
+        sender: "assistant",
+        text: actionData.action_text,
+      });
+    }
+
+    if (actionData.follow_up_question) {
+      actionMessages.push({
+        sender: "assistant",
+        text: actionData.follow_up_question,
+      });
+    }
+
+    if (!actionData.action_text && !actionData.follow_up_question) {
+      actionMessages.push({
+        sender: "assistant",
+        text: "It may help to try one small, manageable adjustment in this area.",
+      });
+    }
+
+    setMessages((prev) => [...prev, ...actionMessages]);
   };
 
   const sendMessage = async () => {
@@ -360,6 +424,9 @@ words: ${data.debug?.word_count ?? 0}`;
           setSuggestionTarget(null);
           setChangeArea(null);
           setSuggestionType(null);
+          setActionLabel(null);
+          setActionText(null);
+          setFollowUpQuestion(null);
           setCurrentStage("awaiting_reaction");
         } else {
           setSelectedThread(null);
