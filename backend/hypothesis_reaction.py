@@ -90,6 +90,16 @@ LEANING_ACCEPT_CUES = {
     "to be fair",
 }
 
+OPEN_CLARIFICATION_VAGUE_CUES = {
+    "yes",
+    "yeah",
+    "it does",
+    "kind of",
+    "a little",
+    "a bit",
+    "maybe",
+}
+
 THREAD_KEYWORDS = {
     "sleep_rest": {
         "sleep",
@@ -264,6 +274,16 @@ def _soft_agree_with_current_thread(
     return False, []
 
 
+def _has_vague_open_clarification_agreement(text: str) -> bool:
+    return any(_contains_phrase(text, cue) for cue in OPEN_CLARIFICATION_VAGUE_CUES)
+
+
+def _has_explicit_selected_thread_reference(text: str, selected_thread: str) -> bool:
+    if not selected_thread:
+        return False
+    return len(_find_terms_for_thread(text, selected_thread)) > 0
+
+
 def detect_known_redirect_threads(reply_text: str, selected_thread: str) -> List[str]:
     text = normalize_reaction_text(reply_text)
     found_threads = []
@@ -356,9 +376,14 @@ def _compute_confidence(primary_score: int, secondary_score: int, reaction: str)
     return round(min(0.95, max(0.35, confidence)), 2)
 
 
-def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
+def classify_hypothesis_reaction(
+    reply_text: str,
+    selected_thread: Optional[str],
+    tried_threads: Optional[List[str]] = None,
+) -> Dict:
     normalized = normalize_reaction_text(reply_text)
     selected_thread = selected_thread if selected_thread in SUPPORTED_THREADS else ""
+    tried_threads = [thread for thread in (tried_threads or []) if thread in SUPPORTED_THREADS]
 
     agree_score, agree_matches = _count_cue_hits(normalized, AGREE_CUES)
     reject_score, reject_matches = _count_cue_hits(normalized, REJECT_CUES)
@@ -386,6 +411,10 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     reject_score += positive_state_score
 
     notes: List[str] = []
+    selected_thread_previously_rejected = bool(selected_thread and selected_thread in tried_threads)
+    explicit_selected_thread_reference = _has_explicit_selected_thread_reference(normalized, selected_thread)
+    no_active_selected_thread = not selected_thread
+    vague_open_clarification_agreement = _has_vague_open_clarification_agreement(normalized)
 
     has_redirect_target = bool(found_threads) or bool(unsupported_text)
     move_away_signal = downplay_score > 0 or reject_score > 0 or redirect_cue_score > 0
@@ -404,7 +433,10 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
     redirected_text: Optional[str] = None
     redirect_supported = False
 
-    if has_redirect_target and move_away_signal:
+    if no_active_selected_thread and vague_open_clarification_agreement and not has_redirect_target:
+        reaction = "unsure"
+        notes.append("No active hypothesis thread; vague agreement treated as open clarification signal.")
+    elif has_redirect_target and move_away_signal:
         if is_agree_with_explanation(reply_text, selected_thread, found_threads, agree_score):
             reaction = "agree"
             notes.append("User agreed with the selected thread and explained its cause.")
@@ -422,11 +454,26 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
         reaction = "reject"
         notes.append("Rejection stronger than uncertainty.")
     elif soft_agree:
-        reaction = "agree"
-        notes.append("User showed soft agreement with the current thread.")
-    elif agree_score > 0 and reject_score == 0 and unsure_score == 0:
-        reaction = "agree"
-        notes.append("Agreement cues with no rejection or uncertainty cues.")
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference:
+            reaction = "unsure"
+            notes.append(
+                "Current thread was previously rejected; soft agreement ignored without explicit thread mention."
+            )
+        else:
+            reaction = "agree"
+            notes.append("User showed soft agreement with the current thread.")
+    elif agree_score > 0 and reject_score == 0 and unsure_score == 0 and selected_thread:
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference:
+            reaction = "unsure"
+            notes.append(
+                "Current thread was previously rejected; plain agreement ignored without explicit thread mention."
+            )
+        else:
+            reaction = "agree"
+            notes.append("Agreement cues with no rejection or uncertainty cues.")
+    elif agree_score > 0 and reject_score == 0 and unsure_score == 0 and not selected_thread:
+        reaction = "unsure"
+        notes.append("Agreement cues detected with no active hypothesis thread; keeping clarification open.")
     elif unsure_score > 0:
         reaction = "unsure"
         notes.append("Uncertainty cues detected.")
@@ -450,4 +497,16 @@ def classify_hypothesis_reaction(reply_text: str, selected_thread: str) -> Dict:
             "unsure": sorted(set(unsure_matches)),
         },
         "notes": notes,
+        "debug": {
+            "agree_score": agree_score,
+            "reject_score": reject_score,
+            "redirect_score": redirect_score,
+            "unsure_score": unsure_score,
+            "selected_thread": selected_thread or None,
+            "has_active_selected_thread": not no_active_selected_thread,
+            "selected_thread_previously_rejected": selected_thread_previously_rejected,
+            "explicit_selected_thread_reference": explicit_selected_thread_reference,
+            "vague_open_clarification_agreement": vague_open_clarification_agreement,
+            "tried_threads_context": tried_threads,
+        },
     }

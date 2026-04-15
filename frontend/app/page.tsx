@@ -180,6 +180,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
 
   const [awaitingReaction, setAwaitingReaction] = useState(false);
+  const [awaitingOpenClarification, setAwaitingOpenClarification] = useState(false);
   const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
 
   const [themes, setThemes] = useState<string[]>([]);
@@ -222,6 +223,7 @@ export default function Home() {
 
   const resetFlowState = () => {
     setAwaitingReaction(false);
+    setAwaitingOpenClarification(false);
     setPendingSelectedThread(null);
     setThemes([]);
     setTriedThreads([]);
@@ -344,6 +346,7 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
 
     setConversationComplete(true);
     setAwaitingReaction(false);
+    setAwaitingOpenClarification(false);
     setPendingSelectedThread(null);
     setAwaitingSubIssue(false);
   };
@@ -381,11 +384,13 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
           {
             reply: userMessage,
             selected_thread: pendingSelectedThread,
+            tried_threads: triedThreads,
           }
         );
 
         const reactionMeta = `reaction: ${reactionData.reaction}
 confidence: ${reactionData.confidence.toFixed(2)}
+mode: awaiting_reaction_to_hypothesis
 selected_thread: ${reactionData.selected_thread || pendingSelectedThread || "none"}
 redirected_thread: ${reactionData.redirected_thread || "none"}
 redirected_text: ${reactionData.redirected_text || "none"}
@@ -446,6 +451,7 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
         if (threadData.resolved && threadData.resolved_thread) {
           setResolvedThread(threadData.resolved_thread);
           setAwaitingReaction(false);
+          setAwaitingOpenClarification(false);
           setPendingSelectedThread(null);
           setTriedSubIssues([]);
           setCandidateSubIssues([]);
@@ -478,6 +484,24 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
           ]);
           setPendingSelectedThread(threadData.next_thread);
           setAwaitingReaction(true);
+          setAwaitingOpenClarification(false);
+        } else if (
+          threadData.resolution_status === "needs_clarification" &&
+          !threadData.next_thread &&
+          !threadData.resolved_thread
+        ) {
+          if (threadData.next_question) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                sender: "assistant",
+                text: threadData.next_question,
+              },
+            ]);
+          }
+          setPendingSelectedThread(null);
+          setAwaitingReaction(false);
+          setAwaitingOpenClarification(true);
         } else if (threadData.next_question) {
           setMessages((prev) => [
             ...prev,
@@ -486,11 +510,138 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
               text: threadData.next_question,
             },
           ]);
-          setPendingSelectedThread(threadData.next_thread || pendingSelectedThread);
-          setAwaitingReaction(true);
+          if (threadData.next_thread) {
+            setPendingSelectedThread(threadData.next_thread);
+            setAwaitingReaction(true);
+            setAwaitingOpenClarification(false);
+          } else {
+            setPendingSelectedThread(null);
+            setAwaitingReaction(false);
+            setAwaitingOpenClarification(true);
+          }
         } else {
           setAwaitingReaction(false);
+          setAwaitingOpenClarification(false);
           setPendingSelectedThread(null);
+        }
+      } else if (awaitingOpenClarification) {
+        const reactionData = await postJson<ReactionResponse>(
+          "http://localhost:8000/classify-reaction",
+          {
+            reply: userMessage,
+            selected_thread: null,
+            tried_threads: triedThreads,
+          }
+        );
+
+        const reactionMeta = `reaction: ${reactionData.reaction}
+confidence: ${reactionData.confidence.toFixed(2)}
+mode: awaiting_open_clarification
+selected_thread: none
+redirected_thread: ${reactionData.redirected_thread || "none"}
+redirected_text: ${reactionData.redirected_text || "none"}
+redirect_supported: ${String(reactionData.redirect_supported)}
+
+matched_signals.agree: ${safeJoin(reactionData.matched_signals?.agree)}
+matched_signals.reject: ${safeJoin(reactionData.matched_signals?.reject)}
+matched_signals.redirect: ${safeJoin(reactionData.matched_signals?.redirect)}
+matched_signals.unsure: ${safeJoin(reactionData.matched_signals?.unsure)}
+
+agree_score: ${reactionData.debug?.agree_score ?? 0}
+reject_score: ${reactionData.debug?.reject_score ?? 0}
+redirect_score: ${reactionData.debug?.redirect_score ?? 0}
+unsure_score: ${reactionData.debug?.unsure_score ?? 0}
+notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | ") || "none"}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "assistant",
+            text: `Iteration 4 classification: ${reactionData.reaction}`,
+            meta: reactionMeta,
+          },
+        ]);
+
+        const threadData = await postJson<ThreadResolutionResponse>(
+          "http://localhost:8000/resolve-thread",
+          {
+            selected_thread: null,
+            reaction: reactionData.reaction,
+            redirected_thread: reactionData.redirected_thread,
+            themes,
+            tried_threads: triedThreads,
+          }
+        );
+
+        const threadMeta = `resolved: ${String(threadData.resolved)}
+resolved_thread: ${threadData.resolved_thread || "none"}
+next_thread: ${threadData.next_thread || "none"}
+resolution_status: ${threadData.resolution_status || "none"}
+next_question: ${threadData.next_question || "none"}
+tried_threads: ${safeJoin(threadData.tried_threads)}
+notes: ${threadData.notes?.join(" | ") || "none"}`;
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            sender: "assistant",
+            text: "Iteration 5: thread resolution",
+            meta: threadMeta,
+          },
+        ]);
+
+        setTriedThreads(threadData.tried_threads || []);
+
+        if (threadData.resolved && threadData.resolved_thread) {
+          setResolvedThread(threadData.resolved_thread);
+          setAwaitingReaction(false);
+          setAwaitingOpenClarification(false);
+          setPendingSelectedThread(null);
+          setTriedSubIssues([]);
+          setCandidateSubIssues([]);
+          setSubIssue(null);
+          setSuggestionTarget(null);
+
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "assistant",
+              text: `Resolved thread: ${threadData.resolved_thread}`,
+            },
+            {
+              sender: "assistant",
+              text: subIssuePrompt(threadData.resolved_thread),
+            },
+          ]);
+
+          setAwaitingSubIssue(true);
+        } else if (
+          threadData.resolution_status === "retry_with_new_thread" &&
+          threadData.next_thread
+        ) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              sender: "assistant",
+              text: threadPrompt(threadData.next_thread),
+            },
+          ]);
+          setPendingSelectedThread(threadData.next_thread);
+          setAwaitingReaction(true);
+          setAwaitingOpenClarification(false);
+        } else {
+          if (threadData.next_question) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                sender: "assistant",
+                text: threadData.next_question,
+              },
+            ]);
+          }
+          setPendingSelectedThread(null);
+          setAwaitingReaction(false);
+          setAwaitingOpenClarification(true);
         }
       } else {
         const data = await postJson<ChatResponse>("http://localhost:8000/chat", {
@@ -536,6 +687,7 @@ words: ${data.debug?.word_count ?? 0}`;
         setTriedThreads([]);
         setResolvedThread(null);
         setAwaitingSubIssue(false);
+        setAwaitingOpenClarification(false);
         setTriedSubIssues([]);
         setCandidateSubIssues([]);
         setSubIssue(null);
@@ -544,9 +696,11 @@ words: ${data.debug?.word_count ?? 0}`;
         if (data.selected_thread) {
           setPendingSelectedThread(data.selected_thread);
           setAwaitingReaction(true);
+          setAwaitingOpenClarification(false);
         } else {
           setPendingSelectedThread(null);
           setAwaitingReaction(false);
+          setAwaitingOpenClarification(false);
         }
       }
     } catch (error) {
@@ -568,6 +722,7 @@ words: ${data.debug?.word_count ?? 0}`;
         },
       ]);
       setAwaitingReaction(false);
+      setAwaitingOpenClarification(false);
       setPendingSelectedThread(null);
       setAwaitingSubIssue(false);
       setConversationComplete(false);
@@ -590,7 +745,9 @@ words: ${data.debug?.word_count ?? 0}`;
             : awaitingSubIssue && resolvedThread
             ? `awaiting sub-issue response for ${resolvedThread}`
             : awaitingReaction && pendingSelectedThread
-            ? `awaiting reaction to ${pendingSelectedThread}`
+            ? `awaiting_reaction_to_hypothesis: ${pendingSelectedThread}`
+            : awaitingOpenClarification
+            ? "awaiting_open_clarification"
             : "awaiting initial day message"}
         </div>
 
@@ -630,6 +787,8 @@ words: ${data.debug?.word_count ?? 0}`;
                 ? "Reply to the assistant's narrowing question..."
                 : awaitingReaction
                 ? "Reply to the assistant's hypothesis..."
+                : awaitingOpenClarification
+                ? "Reply openly; no hypothesis is active..."
                 : "Type a message..."
             }
             className="flex-1 border rounded-lg px-4 py-2 placeholder-gray-500 text-gray-700"

@@ -41,7 +41,8 @@ class Message(BaseModel):
 
 class ReactionPayload(BaseModel):
     reply: str
-    selected_thread: str
+    selected_thread: Optional[str] = None
+    tried_threads: List[str] = Field(default_factory=list)
 
 
 class ThreadResolutionPayload(BaseModel):
@@ -150,6 +151,7 @@ def classify_reaction(payload: ReactionPayload):
     return classify_hypothesis_reaction(
         reply_text=payload.reply,
         selected_thread=payload.selected_thread,
+        tried_threads=payload.tried_threads,
     )
 
 
