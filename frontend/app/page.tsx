@@ -58,6 +58,11 @@ type ThreadResolutionResponse = {
   resolved: boolean;
   resolution_status: string;
   next_question: string | null;
+  mode?: string;
+  latest_question_type?: string;
+  candidate_threads?: string[];
+  rejected_threads?: string[];
+  rejection_count?: number;
   tried_threads: string[];
   notes: string[];
 };
@@ -179,12 +184,20 @@ export default function Home() {
   ]);
   const [loading, setLoading] = useState(false);
 
-  const [awaitingReaction, setAwaitingReaction] = useState(false);
-  const [awaitingOpenClarification, setAwaitingOpenClarification] = useState(false);
+  const [conversationMode, setConversationMode] = useState<
+    | "awaiting_reaction_to_hypothesis"
+    | "awaiting_evidence_clarification"
+    | "resolved_thread"
+    | "fallback_open_exploration"
+    | "awaiting_initial_day_message"
+  >("awaiting_initial_day_message");
   const [pendingSelectedThread, setPendingSelectedThread] = useState<string | null>(null);
 
   const [themes, setThemes] = useState<string[]>([]);
+  const [candidateThreads, setCandidateThreads] = useState<string[]>([]);
   const [triedThreads, setTriedThreads] = useState<string[]>([]);
+  const [rejectedThreads, setRejectedThreads] = useState<string[]>([]);
+  const [rejectionCount, setRejectionCount] = useState(0);
 
   const [resolvedThread, setResolvedThread] = useState<string | null>(null);
   const [awaitingSubIssue, setAwaitingSubIssue] = useState(false);
@@ -222,11 +235,13 @@ export default function Home() {
   };
 
   const resetFlowState = () => {
-    setAwaitingReaction(false);
-    setAwaitingOpenClarification(false);
+    setConversationMode("awaiting_initial_day_message");
     setPendingSelectedThread(null);
     setThemes([]);
+    setCandidateThreads([]);
     setTriedThreads([]);
+    setRejectedThreads([]);
+    setRejectionCount(0);
     setResolvedThread(null);
     setAwaitingSubIssue(false);
     setTriedSubIssues([]);
@@ -345,8 +360,7 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
     ]);
 
     setConversationComplete(true);
-    setAwaitingReaction(false);
-    setAwaitingOpenClarification(false);
+    setConversationMode("resolved_thread");
     setPendingSelectedThread(null);
     setAwaitingSubIssue(false);
   };
@@ -378,20 +392,27 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
     try {
       if (awaitingSubIssue && resolvedThread) {
         await runSubIssueSuggestionAndAction(userMessage, resolvedThread);
-      } else if (awaitingReaction && pendingSelectedThread) {
+      } else if (
+        conversationMode === "awaiting_reaction_to_hypothesis" ||
+        conversationMode === "awaiting_evidence_clarification" ||
+        conversationMode === "fallback_open_exploration"
+      ) {
+        const activeSelectedThread =
+          conversationMode === "awaiting_reaction_to_hypothesis" ? pendingSelectedThread : null;
+
         const reactionData = await postJson<ReactionResponse>(
           "http://localhost:8000/classify-reaction",
           {
             reply: userMessage,
-            selected_thread: pendingSelectedThread,
+            selected_thread: activeSelectedThread,
             tried_threads: triedThreads,
           }
         );
 
         const reactionMeta = `reaction: ${reactionData.reaction}
 confidence: ${reactionData.confidence.toFixed(2)}
-mode: awaiting_reaction_to_hypothesis
-selected_thread: ${reactionData.selected_thread || pendingSelectedThread || "none"}
+mode: ${conversationMode}
+selected_thread: ${reactionData.selected_thread || activeSelectedThread || "none"}
 redirected_thread: ${reactionData.redirected_thread || "none"}
 redirected_text: ${reactionData.redirected_text || "none"}
 redirect_supported: ${String(reactionData.redirect_supported)}
@@ -421,11 +442,15 @@ notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | 
         const threadData = await postJson<ThreadResolutionResponse>(
           "http://localhost:8000/resolve-thread",
           {
-            selected_thread: pendingSelectedThread,
+            selected_thread: activeSelectedThread,
             reaction: reactionData.reaction,
             redirected_thread: reactionData.redirected_thread,
+            user_text: userMessage,
             themes,
+            candidate_threads: candidateThreads,
             tried_threads: triedThreads,
+            rejected_threads: rejectedThreads,
+            rejection_count: rejectionCount,
           }
         );
 
@@ -433,8 +458,13 @@ notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | 
 resolved_thread: ${threadData.resolved_thread || "none"}
 next_thread: ${threadData.next_thread || "none"}
 resolution_status: ${threadData.resolution_status || "none"}
+mode: ${threadData.mode || "none"}
+latest_question_type: ${threadData.latest_question_type || "none"}
 next_question: ${threadData.next_question || "none"}
 tried_threads: ${safeJoin(threadData.tried_threads)}
+rejected_threads: ${safeJoin(threadData.rejected_threads)}
+rejection_count: ${threadData.rejection_count ?? 0}
+candidate_threads: ${safeJoin(threadData.candidate_threads)}
 notes: ${threadData.notes?.join(" | ") || "none"}`;
 
         setMessages((prev) => [
@@ -447,11 +477,13 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
         ]);
 
         setTriedThreads(threadData.tried_threads || []);
+        setCandidateThreads(threadData.candidate_threads || candidateThreads);
+        setRejectedThreads(threadData.rejected_threads || rejectedThreads);
+        setRejectionCount(threadData.rejection_count ?? rejectionCount);
 
         if (threadData.resolved && threadData.resolved_thread) {
           setResolvedThread(threadData.resolved_thread);
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(false);
+          setConversationMode("resolved_thread");
           setPendingSelectedThread(null);
           setTriedSubIssues([]);
           setCandidateSubIssues([]);
@@ -483,25 +515,7 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
             },
           ]);
           setPendingSelectedThread(threadData.next_thread);
-          setAwaitingReaction(true);
-          setAwaitingOpenClarification(false);
-        } else if (
-          threadData.resolution_status === "needs_clarification" &&
-          !threadData.next_thread &&
-          !threadData.resolved_thread
-        ) {
-          if (threadData.next_question) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                sender: "assistant",
-                text: threadData.next_question,
-              },
-            ]);
-          }
-          setPendingSelectedThread(null);
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(true);
+          setConversationMode("awaiting_reaction_to_hypothesis");
         } else if (threadData.next_question) {
           setMessages((prev) => [
             ...prev,
@@ -510,138 +524,17 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
               text: threadData.next_question,
             },
           ]);
-          if (threadData.next_thread) {
-            setPendingSelectedThread(threadData.next_thread);
-            setAwaitingReaction(true);
-            setAwaitingOpenClarification(false);
+          setPendingSelectedThread(threadData.next_thread || null);
+          if (threadData.mode === "fallback_open_exploration") {
+            setConversationMode("fallback_open_exploration");
+          } else if (threadData.next_thread) {
+            setConversationMode("awaiting_reaction_to_hypothesis");
           } else {
-            setPendingSelectedThread(null);
-            setAwaitingReaction(false);
-            setAwaitingOpenClarification(true);
+            setConversationMode("awaiting_evidence_clarification");
           }
         } else {
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(false);
+          setConversationMode("awaiting_initial_day_message");
           setPendingSelectedThread(null);
-        }
-      } else if (awaitingOpenClarification) {
-        const reactionData = await postJson<ReactionResponse>(
-          "http://localhost:8000/classify-reaction",
-          {
-            reply: userMessage,
-            selected_thread: null,
-            tried_threads: triedThreads,
-          }
-        );
-
-        const reactionMeta = `reaction: ${reactionData.reaction}
-confidence: ${reactionData.confidence.toFixed(2)}
-mode: awaiting_open_clarification
-selected_thread: none
-redirected_thread: ${reactionData.redirected_thread || "none"}
-redirected_text: ${reactionData.redirected_text || "none"}
-redirect_supported: ${String(reactionData.redirect_supported)}
-
-matched_signals.agree: ${safeJoin(reactionData.matched_signals?.agree)}
-matched_signals.reject: ${safeJoin(reactionData.matched_signals?.reject)}
-matched_signals.redirect: ${safeJoin(reactionData.matched_signals?.redirect)}
-matched_signals.unsure: ${safeJoin(reactionData.matched_signals?.unsure)}
-
-agree_score: ${reactionData.debug?.agree_score ?? 0}
-reject_score: ${reactionData.debug?.reject_score ?? 0}
-redirect_score: ${reactionData.debug?.redirect_score ?? 0}
-unsure_score: ${reactionData.debug?.unsure_score ?? 0}
-notes: ${reactionData.debug?.notes?.join(" | ") || reactionData.notes?.join(" | ") || "none"}`;
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "assistant",
-            text: `Iteration 4 classification: ${reactionData.reaction}`,
-            meta: reactionMeta,
-          },
-        ]);
-
-        const threadData = await postJson<ThreadResolutionResponse>(
-          "http://localhost:8000/resolve-thread",
-          {
-            selected_thread: null,
-            reaction: reactionData.reaction,
-            redirected_thread: reactionData.redirected_thread,
-            themes,
-            tried_threads: triedThreads,
-          }
-        );
-
-        const threadMeta = `resolved: ${String(threadData.resolved)}
-resolved_thread: ${threadData.resolved_thread || "none"}
-next_thread: ${threadData.next_thread || "none"}
-resolution_status: ${threadData.resolution_status || "none"}
-next_question: ${threadData.next_question || "none"}
-tried_threads: ${safeJoin(threadData.tried_threads)}
-notes: ${threadData.notes?.join(" | ") || "none"}`;
-
-        setMessages((prev) => [
-          ...prev,
-          {
-            sender: "assistant",
-            text: "Iteration 5: thread resolution",
-            meta: threadMeta,
-          },
-        ]);
-
-        setTriedThreads(threadData.tried_threads || []);
-
-        if (threadData.resolved && threadData.resolved_thread) {
-          setResolvedThread(threadData.resolved_thread);
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(false);
-          setPendingSelectedThread(null);
-          setTriedSubIssues([]);
-          setCandidateSubIssues([]);
-          setSubIssue(null);
-          setSuggestionTarget(null);
-
-          setMessages((prev) => [
-            ...prev,
-            {
-              sender: "assistant",
-              text: `Resolved thread: ${threadData.resolved_thread}`,
-            },
-            {
-              sender: "assistant",
-              text: subIssuePrompt(threadData.resolved_thread),
-            },
-          ]);
-
-          setAwaitingSubIssue(true);
-        } else if (
-          threadData.resolution_status === "retry_with_new_thread" &&
-          threadData.next_thread
-        ) {
-          setMessages((prev) => [
-            ...prev,
-            {
-              sender: "assistant",
-              text: threadPrompt(threadData.next_thread),
-            },
-          ]);
-          setPendingSelectedThread(threadData.next_thread);
-          setAwaitingReaction(true);
-          setAwaitingOpenClarification(false);
-        } else {
-          if (threadData.next_question) {
-            setMessages((prev) => [
-              ...prev,
-              {
-                sender: "assistant",
-                text: threadData.next_question,
-              },
-            ]);
-          }
-          setPendingSelectedThread(null);
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(true);
         }
       } else {
         const data = await postJson<ChatResponse>("http://localhost:8000/chat", {
@@ -684,10 +577,13 @@ words: ${data.debug?.word_count ?? 0}`;
 
         setConversationComplete(false);
         setThemes(data.themes || []);
+        setCandidateThreads(Object.keys(data.thread_scores || {}));
         setTriedThreads([]);
+        setRejectedThreads([]);
+        setRejectionCount(0);
         setResolvedThread(null);
         setAwaitingSubIssue(false);
-        setAwaitingOpenClarification(false);
+        setConversationMode("awaiting_initial_day_message");
         setTriedSubIssues([]);
         setCandidateSubIssues([]);
         setSubIssue(null);
@@ -695,12 +591,10 @@ words: ${data.debug?.word_count ?? 0}`;
 
         if (data.selected_thread) {
           setPendingSelectedThread(data.selected_thread);
-          setAwaitingReaction(true);
-          setAwaitingOpenClarification(false);
+          setConversationMode("awaiting_reaction_to_hypothesis");
         } else {
           setPendingSelectedThread(null);
-          setAwaitingReaction(false);
-          setAwaitingOpenClarification(false);
+          setConversationMode("awaiting_evidence_clarification");
         }
       }
     } catch (error) {
@@ -721,8 +615,7 @@ words: ${data.debug?.word_count ?? 0}`;
           text: userFacingError,
         },
       ]);
-      setAwaitingReaction(false);
-      setAwaitingOpenClarification(false);
+      setConversationMode("awaiting_initial_day_message");
       setPendingSelectedThread(null);
       setAwaitingSubIssue(false);
       setConversationComplete(false);
@@ -744,11 +637,9 @@ words: ${data.debug?.word_count ?? 0}`;
             ? "awaiting final acknowledgement"
             : awaitingSubIssue && resolvedThread
             ? `awaiting sub-issue response for ${resolvedThread}`
-            : awaitingReaction && pendingSelectedThread
+            : conversationMode === "awaiting_reaction_to_hypothesis" && pendingSelectedThread
             ? `awaiting_reaction_to_hypothesis: ${pendingSelectedThread}`
-            : awaitingOpenClarification
-            ? "awaiting_open_clarification"
-            : "awaiting initial day message"}
+            : conversationMode}
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
@@ -785,10 +676,12 @@ words: ${data.debug?.word_count ?? 0}`;
                 ? "Reply to wrap things up..."
                 : awaitingSubIssue
                 ? "Reply to the assistant's narrowing question..."
-                : awaitingReaction
+                : conversationMode === "awaiting_reaction_to_hypothesis"
                 ? "Reply to the assistant's hypothesis..."
-                : awaitingOpenClarification
-                ? "Reply openly; no hypothesis is active..."
+                : conversationMode === "awaiting_evidence_clarification"
+                ? "Reply to the concrete follow-up question..."
+                : conversationMode === "fallback_open_exploration"
+                ? "Reply with what feels most noticeable..."
                 : "Type a message..."
             }
             className="flex-1 border rounded-lg px-4 py-2 placeholder-gray-500 text-gray-700"

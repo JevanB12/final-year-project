@@ -49,8 +49,12 @@ class ThreadResolutionPayload(BaseModel):
     selected_thread: Optional[str] = None
     reaction: str
     redirected_thread: Optional[str] = None
+    user_text: str = ""
     themes: List[str] = Field(default_factory=list)
+    candidate_threads: List[str] = Field(default_factory=list)
     tried_threads: List[str] = Field(default_factory=list)
+    rejected_threads: List[str] = Field(default_factory=list)
+    rejection_count: int = 0
 
 
 class SubIssueResolutionPayload(BaseModel):
@@ -161,8 +165,12 @@ def resolve_thread_endpoint(payload: ThreadResolutionPayload):
         selected_thread=payload.selected_thread,
         reaction=payload.reaction,
         redirected_thread=payload.redirected_thread,
+        user_text=payload.user_text,
         themes=payload.themes,
+        candidate_threads=payload.candidate_threads,
         tried_threads=payload.tried_threads,
+        rejected_threads=payload.rejected_threads,
+        rejection_count=payload.rejection_count,
     )
 
 

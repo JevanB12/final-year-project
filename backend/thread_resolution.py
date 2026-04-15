@@ -18,6 +18,21 @@ THREAD_SOFT_PHRASES = {
     "meals_regularity": "whether your meals have been a bit off",
 }
 
+THREAD_HINT_TERMS = {
+    "work_study_routine": {"work", "study", "deadline", "assignment", "pressure", "coursework"},
+    "sleep_rest": {"sleep", "rest", "tired", "exhausted", "drained", "energy"},
+    "daily_structure": {"routine", "schedule", "structure", "busy", "nonstop", "downtime"},
+    "physical_activity": {"exercise", "activity", "workout", "gym", "movement", "training"},
+    "meals_regularity": {"meal", "meals", "eat", "eating", "breakfast", "lunch", "dinner"},
+}
+
+EVIDENCE_QUESTIONS = [
+    "When it comes up most, does it feel more like pressure, overthinking, or just a general sense of being off?",
+    "When you notice it most, what’s usually going on around you?",
+    "Does it feel more mental, more physical, or more like you can’t switch off?",
+    "Is it more there while you’re working, or later when you’re trying to relax?",
+]
+
 
 def _dedupe(items: List[str]) -> List[str]:
     seen = set()
@@ -71,6 +86,34 @@ def _pick_alternative(
         if candidate != exclude and candidate not in tried_threads:
             return candidate
     return None
+
+
+def _pick_evidence_question(rejection_count: int) -> str:
+    index = min(max(rejection_count, 0), len(EVIDENCE_QUESTIONS) - 1)
+    return EVIDENCE_QUESTIONS[index]
+
+
+def _build_fallback_open_question() -> str:
+    return "What feels most noticeable about it when it comes up?"
+
+
+def _explicitly_mentions_thread(text: str, thread: str) -> bool:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return False
+    return any(term in normalized for term in THREAD_HINT_TERMS.get(thread, set()))
+
+
+def _score_thread_from_evidence(text: str, thread: str) -> float:
+    normalized = (text or "").strip().lower()
+    if not normalized:
+        return 0.0
+    terms = THREAD_HINT_TERMS.get(thread, set())
+    score = 0.0
+    for term in terms:
+        if term in normalized:
+            score += 1.0
+    return score
 
 
 def _build_accept_response(resolved_thread: str) -> str:
@@ -182,13 +225,19 @@ def resolve_thread(
     selected_thread: Optional[str],
     reaction: str,
     redirected_thread: Optional[str] = None,
+    user_text: str = "",
     themes: Optional[List[str]] = None,
+    candidate_threads: Optional[List[str]] = None,
     tried_threads: Optional[List[str]] = None,
+    rejected_threads: Optional[List[str]] = None,
+    rejection_count: int = 0,
 ) -> Dict:
     themes = themes or []
+    candidate_threads = candidate_threads or []
     tried_threads = tried_threads or []
+    rejected_threads = rejected_threads or []
 
-    candidates = _candidate_threads(
+    candidates = _dedupe(candidate_threads) or _candidate_threads(
         selected_thread=selected_thread,
         redirected_thread=redirected_thread,
         themes=themes,
@@ -199,6 +248,8 @@ def resolve_thread(
 
     selected_history = [selected_thread] if selected_thread else []
     updated_tried_threads = _dedupe([*tried_threads, *selected_history])
+    updated_rejected_threads = _dedupe(rejected_threads)
+    current_mode = "awaiting_reaction_to_hypothesis" if selected_thread else "awaiting_evidence_clarification"
 
     if reaction in {"accept", "agree"}:
         resolved_thread = selected_thread
@@ -209,6 +260,11 @@ def resolve_thread(
             "resolution_status": "resolved",
             "next_question": None,
             "tried_threads": updated_tried_threads,
+            "candidate_threads": candidates,
+            "rejected_threads": updated_rejected_threads,
+            "rejection_count": rejection_count,
+            "mode": "resolved_thread",
+            "latest_question_type": "hypothesis",
             "reaction_status": "accepted",
             "response": _build_accept_response(resolved_thread) if resolved_thread else (
                 "That makes sense. We can stay with that and narrow it down a bit more."
@@ -218,13 +274,17 @@ def resolve_thread(
         }
 
     if reaction == "reject":
+        if selected_thread:
+            updated_rejected_threads = _dedupe([*updated_rejected_threads, selected_thread])
+            rejection_count = rejection_count + 1
+
         alternative_thread = _pick_alternative(
             candidates=candidates,
             tried_threads=tried_threads,
             exclude=selected_thread,
         )
 
-        if alternative_thread:
+        if alternative_thread and rejection_count < 2:
             return {
                 "resolved": False,
                 "resolved_thread": None,
@@ -232,6 +292,11 @@ def resolve_thread(
                 "resolution_status": "retry_with_new_thread",
                 "next_question": None,
                 "tried_threads": updated_tried_threads,
+                "candidate_threads": candidates,
+                "rejected_threads": updated_rejected_threads,
+                "rejection_count": rejection_count,
+                "mode": "awaiting_reaction_to_hypothesis",
+                "latest_question_type": "hypothesis",
                 "reaction_status": "rejected",
                 "response": _build_reject_response(alternative_thread, selected_thread),
                 "notes": [
@@ -246,14 +311,19 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _build_reject_clarification_question(selected_thread),
+            "next_question": _pick_evidence_question(rejection_count),
             "tried_threads": updated_tried_threads,
+            "candidate_threads": candidates,
+            "rejected_threads": updated_rejected_threads,
+            "rejection_count": rejection_count,
+            "mode": "awaiting_evidence_clarification",
+            "latest_question_type": "evidence",
             "reaction_status": "rejected",
             "response": _build_reject_response(alternative_thread, selected_thread),
             "notes": [
-                "User rejected the initial hypothesis and no strong alternative thread was available."
+                "User rejected current hypothesis.",
+                "Switching to evidence clarification to avoid stalling after repeated rejection.",
             ],
-            "candidate_threads": candidates,
         }
 
     if reaction == "redirect":
@@ -271,13 +341,17 @@ def resolve_thread(
                 "resolution_status": "retry_with_new_thread",
                 "next_question": None,
                 "tried_threads": updated_tried_threads,
+                "candidate_threads": candidates,
+                "rejected_threads": updated_rejected_threads,
+                "rejection_count": rejection_count,
+                "mode": "awaiting_reaction_to_hypothesis",
+                "latest_question_type": "hypothesis",
                 "reaction_status": "redirected",
                 "response": _build_redirect_response(resolved_thread),
                 "notes": [
                     "User redirected away from original thread.",
                     "Switching focus and requesting confirmation on redirected thread.",
                 ],
-                "candidate_threads": candidates,
             }
 
         return {
@@ -285,15 +359,78 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _build_redirect_clarification_question(),
+            "next_question": _pick_evidence_question(rejection_count),
             "tried_threads": updated_tried_threads,
+            "candidate_threads": candidates,
+            "rejected_threads": updated_rejected_threads,
+            "rejection_count": rejection_count,
+            "mode": "awaiting_evidence_clarification",
+            "latest_question_type": "evidence",
             "reaction_status": "redirected",
             "response": "Yeah, that makes sense. We can shift focus a bit and see what fits better.",
             "notes": ["User redirected but no clear supported target was detected."],
-            "candidate_threads": candidates,
         }
 
     if reaction == "unsure":
+        if not selected_thread:
+            explicit_reintroduced = next(
+                (thread for thread in updated_rejected_threads if _explicitly_mentions_thread(user_text, thread)),
+                None,
+            )
+            eligible = [thread for thread in candidates if thread not in updated_rejected_threads]
+            scored = sorted(
+                [(thread, _score_thread_from_evidence(user_text, thread)) for thread in eligible],
+                key=lambda item: item[1],
+                reverse=True,
+            )
+            best_thread = scored[0][0] if scored else None
+            best_score = scored[0][1] if scored else 0.0
+
+            if explicit_reintroduced:
+                best_thread = explicit_reintroduced
+                best_score = max(best_score, 1.0)
+
+            if best_thread and best_score >= 1.0:
+                return {
+                    "resolved": False,
+                    "resolved_thread": None,
+                    "next_thread": best_thread,
+                    "resolution_status": "retry_with_new_thread",
+                    "next_question": None,
+                    "tried_threads": updated_tried_threads,
+                    "candidate_threads": candidates,
+                    "rejected_threads": updated_rejected_threads,
+                    "rejection_count": rejection_count,
+                    "mode": "awaiting_reaction_to_hypothesis",
+                    "latest_question_type": "hypothesis",
+                    "reaction_status": "unsure",
+                    "response": _build_redirect_response(best_thread),
+                    "notes": [
+                        "Evidence clarification answer rescored candidate threads.",
+                        "Moving back to a soft hypothesis check.",
+                    ],
+                }
+
+            return {
+                "resolved": False,
+                "resolved_thread": None,
+                "next_thread": None,
+                "resolution_status": "needs_clarification",
+                "next_question": _build_fallback_open_question(),
+                "tried_threads": updated_tried_threads,
+                "candidate_threads": candidates,
+                "rejected_threads": updated_rejected_threads,
+                "rejection_count": rejection_count,
+                "mode": "fallback_open_exploration",
+                "latest_question_type": "evidence",
+                "reaction_status": "unsure",
+                "response": "That makes sense. We can keep it open for a moment and focus on what stands out most.",
+                "notes": [
+                    "Evidence clarification did not surface a strong candidate thread.",
+                    "Moved to fallback open exploration question.",
+                ],
+            }
+
         secondary_thread = _pick_alternative(
             candidates=candidates,
             tried_threads=tried_threads,
@@ -305,14 +442,18 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _build_unsure_response(selected_thread, secondary_thread),
+            "next_question": _pick_evidence_question(rejection_count),
             "tried_threads": updated_tried_threads,
+            "candidate_threads": candidates,
+            "rejected_threads": updated_rejected_threads,
+            "rejection_count": rejection_count,
+            "mode": "awaiting_evidence_clarification",
+            "latest_question_type": "evidence",
             "reaction_status": "unsure",
             "response": _build_unsure_response(selected_thread, secondary_thread),
             "notes": [
                 "User was unsure, so the system kept the conversation exploratory and offered soft possibilities."
             ],
-            "candidate_threads": candidates,
             "suggested_threads": _dedupe([selected_thread, secondary_thread]),
         }
 
@@ -321,12 +462,16 @@ def resolve_thread(
         "resolved_thread": None,
         "next_thread": None,
         "resolution_status": "needs_clarification",
-        "next_question": _build_unknown_clarification_question(),
+        "next_question": _pick_evidence_question(rejection_count),
         "tried_threads": updated_tried_threads,
+        "candidate_threads": candidates,
+        "rejected_threads": updated_rejected_threads,
+        "rejection_count": rejection_count,
+        "mode": "awaiting_evidence_clarification" if current_mode != "awaiting_reaction_to_hypothesis" else current_mode,
+        "latest_question_type": "evidence",
         "reaction_status": "unknown",
         "response": (
             "I’m not fully sure which direction fits best yet, so we can keep it open and work through it gradually."
         ),
         "notes": ["Fallback branch used because reaction was unknown."],
-        "candidate_threads": candidates,
     }
