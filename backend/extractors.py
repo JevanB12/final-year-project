@@ -29,9 +29,43 @@ STRAIN_CUES = {
     "quite a lot",
 }
 
+STRONG_DISTRESS_CUES = {
+    "can't rest",
+    "cant rest",
+    "can't switch off",
+    "cant switch off",
+    "getting the best of me",
+    "getting the best of my mental",
+    "overthinking work",
+    "always thinking about work",
+    "hard to switch off",
+    "mentally drained",
+    "burnt out",
+    "burned out",
+}
+
+CONTRAST_CUES = {
+    "but",
+    "the only thing is",
+    "only thing is",
+    "except",
+    "although",
+    "even though",
+    "though",
+    "however",
+}
+
 
 def detect_strain(text: str) -> bool:
     return any(cue in text for cue in STRAIN_CUES)
+
+
+def detect_strong_distress(text: str) -> bool:
+    return any(cue in text for cue in STRONG_DISTRESS_CUES)
+
+
+def detect_contrast(text: str) -> bool:
+    return any(cue in text for cue in CONTRAST_CUES)
 
 
 def normalize_text(text: str) -> str:
@@ -84,6 +118,10 @@ def extract_sentiment(text: str) -> Tuple[float, float]:
         if phrase in text:
             neg_score += weight
 
+    for cue in STRONG_DISTRESS_CUES:
+        if cue in text:
+            neg_score += 2.5
+
     if neg_score > 0:
         for cue, weight in support_cues.items():
             if cue in text:
@@ -92,13 +130,34 @@ def extract_sentiment(text: str) -> Tuple[float, float]:
     return pos_score, neg_score
 
 
-def extract_tone(pos: float, neg: float) -> str:
+def extract_tone(
+    pos: float,
+    neg: float,
+    strain_detected: bool = False,
+    strong_distress: bool = False,
+    contrast_detected: bool = False,
+) -> str:
     if pos == 0 and neg == 0:
         return "neutral"
+
+    if strong_distress and pos > 0:
+        return "mixed"
+
+    if contrast_detected and strong_distress:
+        return "mixed"
+
+    if strain_detected and pos > neg and neg > 0:
+        return "mixed"
+
     if pos > 0 and neg > 0 and abs(pos - neg) <= 1.5:
         return "mixed"
+
+    if pos > 0 and neg > 0 and strong_distress:
+        return "mixed"
+
     if pos > neg:
         return "positive"
+
     return "negative"
 
 

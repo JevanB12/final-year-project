@@ -111,8 +111,65 @@ function threadPrompt(thread: string | null): string {
   }
 }
 
+function subIssuePrompt(thread: string | null): string {
+  switch (thread) {
+    case "sleep_rest":
+      return "When you think about sleep lately, is it more about how long you sleep, how well you sleep, when you go to bed, how regular the pattern is, or how tired you feel in the day?";
+    case "work_study_routine":
+      return "When you picture work or study pressure, does it feel more like overload, focus problems, putting things off, deadlines, or not getting breaks?";
+    case "daily_structure":
+      return "Does the day feel more like there's no routine, it's overpacked, time is poorly spread, or there's no real downtime?";
+    case "meals_regularity":
+      return "Is eating more of a problem around skipping meals, eating late, irregular patterns, or not eating enough?";
+    case "physical_activity":
+      return "Does movement feel more very low right now, inconsistent, too intense, or like there's not enough of it?";
+    default:
+      return "Which part of that feels strongest for you right now?";
+  }
+}
+
 function safeJoin(values?: string[]) {
   return values?.join(", ") || "none";
+}
+
+function closingReply(userText: string) {
+  const text = userText.toLowerCase();
+
+  if (
+    text.includes("yeah") ||
+    text.includes("yes") ||
+    text.includes("could do") ||
+    text.includes("i'll try") ||
+    text.includes("ill try") ||
+    text.includes("i will try") ||
+    text.includes("sounds good") ||
+    text.includes("that works")
+  ) {
+    return "Nice — even giving that a proper try is a good step. We can leave it there for now, and you can always come back to this later.";
+  }
+
+  if (
+    text.includes("probably won't") ||
+    text.includes("probably wont") ||
+    text.includes("not sure") ||
+    text.includes("maybe") ||
+    text.includes("hard") ||
+    text.includes("difficult")
+  ) {
+    return "That’s fair — even noticing what might be hard to stick to is useful. We can leave it there for now, and you can always come back to it later.";
+  }
+
+  if (
+    text.includes("no") ||
+    text.includes("don't think") ||
+    text.includes("dont think") ||
+    text.includes("won't") ||
+    text.includes("wont")
+  ) {
+    return "That’s okay — at least you’ve narrowed down what the issue seems to be. We can leave it there for now, and you can always revisit it later.";
+  }
+
+  return "That makes sense — we can leave it there for now. Feel free to come back to this anytime.";
 }
 
 export default function Home() {
@@ -135,6 +192,20 @@ export default function Home() {
   const [subIssue, setSubIssue] = useState<string | null>(null);
 
   const [suggestionTarget, setSuggestionTarget] = useState<string | null>(null);
+  const [conversationComplete, setConversationComplete] = useState(false);
+
+  const resetFlowState = () => {
+    setAwaitingReaction(false);
+    setPendingSelectedThread(null);
+    setThemes([]);
+    setTriedThreads([]);
+    setResolvedThread(null);
+    setAwaitingSubIssue(false);
+    setTriedSubIssues([]);
+    setCandidateSubIssues([]);
+    setSubIssue(null);
+    setSuggestionTarget(null);
+  };
 
   const runSubIssueSuggestionAndAction = async (
     userMessage: string,
@@ -259,12 +330,33 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
         text: actionData.follow_up_question,
       },
     ]);
+
+    setConversationComplete(true);
+    setAwaitingReaction(false);
+    setPendingSelectedThread(null);
+    setAwaitingSubIssue(false);
   };
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
 
     const userMessage = input.trim();
+
+    if (conversationComplete) {
+      setMessages((prev) => [
+        ...prev,
+        { sender: "user", text: userMessage },
+        {
+          sender: "assistant",
+          text: closingReply(userMessage),
+        },
+      ]);
+      setInput("");
+      setConversationComplete(false);
+      resetFlowState();
+      return;
+    }
+
     setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
     setInput("");
     setLoading(true);
@@ -367,18 +459,7 @@ notes: ${threadData.notes?.join(" | ") || "none"}`;
             },
             {
               sender: "assistant",
-              text:
-                threadData.resolved_thread === "sleep_rest"
-                  ? "When you think about sleep lately, is it more about how long you sleep, how well you sleep, when you go to bed, how regular the pattern is, or how tired you feel in the day?"
-                  : threadData.resolved_thread === "work_study_routine"
-                  ? "When you picture work or study pressure, does it feel more like overload, focus problems, putting things off, deadlines, or not getting breaks?"
-                  : threadData.resolved_thread === "daily_structure"
-                  ? "Does the day feel more like there's no routine, it's overpacked, time is poorly spread, or there's no real downtime?"
-                  : threadData.resolved_thread === "meals_regularity"
-                  ? "Is eating more of a problem around skipping meals, eating late, irregular patterns, or not eating enough?"
-                  : threadData.resolved_thread === "physical_activity"
-                  ? "Does movement feel more very low right now, inconsistent, too intense, or like there's not enough of it?"
-                  : "Which part of that feels strongest for you right now?",
+              text: subIssuePrompt(threadData.resolved_thread),
             },
           ]);
 
@@ -455,6 +536,7 @@ words: ${data.debug?.word_count ?? 0}`;
           },
         ]);
 
+        setConversationComplete(false);
         setThemes(data.themes || []);
         setTriedThreads([]);
         setResolvedThread(null);
@@ -483,6 +565,7 @@ words: ${data.debug?.word_count ?? 0}`;
       setAwaitingReaction(false);
       setPendingSelectedThread(null);
       setAwaitingSubIssue(false);
+      setConversationComplete(false);
     } finally {
       setLoading(false);
     }
@@ -497,7 +580,9 @@ words: ${data.debug?.word_count ?? 0}`;
         </p>
 
         <div className="mb-3 text-xs text-gray-500">
-          mode: {awaitingSubIssue && resolvedThread
+          mode: {conversationComplete
+            ? "awaiting final acknowledgement"
+            : awaitingSubIssue && resolvedThread
             ? `awaiting sub-issue response for ${resolvedThread}`
             : awaitingReaction && pendingSelectedThread
             ? `awaiting reaction to ${pendingSelectedThread}`
@@ -534,7 +619,9 @@ words: ${data.debug?.word_count ?? 0}`;
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder={
-              awaitingSubIssue
+              conversationComplete
+                ? "Reply to wrap things up..."
+                : awaitingSubIssue
                 ? "Reply to the assistant's narrowing question..."
                 : awaitingReaction
                 ? "Reply to the assistant's hypothesis..."
