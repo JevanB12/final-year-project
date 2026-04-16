@@ -39,7 +39,6 @@ AGREE_CUES = {
     "that has to be it",
     "thats it",
     "that's it",
-    "to be honest",
 }
 
 STRONG_AGREE_CUES = {
@@ -53,6 +52,19 @@ STRONG_AGREE_CUES = {
     "spot on",
     "for sure",
     "definitely",
+}
+
+LATE_STAGE_SOFT_AGREE_CUES = {
+    "i guess",
+    "i guess so",
+    "probably",
+    "could be",
+    "might be",
+    "seems like it",
+    "seems like",
+    "i think",
+    "i think so",
+    "maybe yeah",
 }
 
 REJECT_CUES = {
@@ -374,6 +386,11 @@ def _has_explicit_selected_thread_reference(text: str, selected_thread: str) -> 
     return len(_find_terms_for_thread(text, selected_thread)) > 0
 
 
+def _has_late_stage_soft_agreement(text: str) -> tuple[bool, List[str]]:
+    hits = [cue for cue in LATE_STAGE_SOFT_AGREE_CUES if _contains_phrase(text, cue)]
+    return bool(hits), sorted(set(hits))
+
+
 def detect_known_redirect_threads(reply_text: str, selected_thread: str) -> List[str]:
     text = normalize_reaction_text(reply_text)
     found_threads = []
@@ -498,6 +515,7 @@ def classify_hypothesis_reaction(
 
     downplay_score, downplay_matches = _selected_downplay_score(normalized, selected_thread)
     positive_state_score, positive_state_matches = _selected_positive_state_score(normalized, selected_thread)
+    late_stage_soft_agree, late_stage_soft_agree_matches = _has_late_stage_soft_agreement(normalized)
     unsupported_text = extract_unsupported_redirect_text(normalized, selected_thread, found_threads)
 
     reject_score += downplay_score
@@ -516,6 +534,7 @@ def classify_hypothesis_reaction(
     explicit_selected_thread_reference = _has_explicit_selected_thread_reference(normalized, selected_thread)
     no_active_selected_thread = not selected_thread
     vague_open_clarification_agreement = _has_vague_open_clarification_agreement(normalized)
+    late_stage_context = bool(selected_thread and len(tried_threads) >= 2)
 
     has_redirect_target = bool(found_threads) or bool(unsupported_text)
     move_away_signal = downplay_score > 0 or reject_score > 0 or redirect_cue_score > 0
@@ -560,11 +579,14 @@ def classify_hypothesis_reaction(
     elif strong_agree_score > 0 and selected_thread:
         reaction = "agree"
         notes.append("Strong agreement language confirmed the current hypothesis thread.")
+    elif late_stage_context and late_stage_soft_agree and reject_score == 0 and redirect_score == 0 and selected_thread:
+        reaction = "agree"
+        notes.append("Late-stage soft agreement accepted due to accumulated narrowing context.")
     elif reject_score > unsure_score and not has_redirect_target:
         reaction = "reject"
         notes.append("Rejection stronger than uncertainty.")
     elif soft_agree:
-        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0:
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0 and not (late_stage_context and late_stage_soft_agree):
             reaction = "unsure"
             notes.append(
                 "Current thread was previously rejected; soft agreement ignored without explicit thread mention."
@@ -573,7 +595,7 @@ def classify_hypothesis_reaction(
             reaction = "agree"
             notes.append("User showed soft agreement with the current thread.")
     elif agree_score > 0 and reject_score == 0 and unsure_score == 0 and selected_thread:
-        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0:
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0 and not (late_stage_context and late_stage_soft_agree):
             reaction = "unsure"
             notes.append(
                 "Current thread was previously rejected; plain agreement ignored without explicit thread mention."
@@ -591,9 +613,10 @@ def classify_hypothesis_reaction(
         reaction = "unsure"
         notes.append("Signals were weak or ambiguous; defaulted to unsure.")
 
-    primary = max(agree_score + strong_agree_score, reject_score, redirect_score, unsure_score)
+    combined_agree_score = agree_score + strong_agree_score + (1 if late_stage_context and late_stage_soft_agree else 0)
+    primary = max(combined_agree_score, reject_score, redirect_score, unsure_score)
     secondary = sorted(
-        [agree_score + strong_agree_score, reject_score, redirect_score, unsure_score],
+        [combined_agree_score, reject_score, redirect_score, unsure_score],
         reverse=True,
     )[1]
 
@@ -604,14 +627,14 @@ def classify_hypothesis_reaction(
         "redirect_supported": redirect_supported,
         "confidence": _compute_confidence(primary, secondary, reaction),
         "matched_signals": {
-            "agree": sorted(set(agree_matches + strong_agree_matches + soft_agree_matches)),
+            "agree": sorted(set(agree_matches + strong_agree_matches + late_stage_soft_agree_matches + soft_agree_matches)),
             "reject": sorted(set(reject_matches + downplay_matches + positive_state_matches)),
             "redirect": sorted(set(redirect_cue_matches + found_terms)),
             "unsure": sorted(set(unsure_matches)),
         },
         "notes": notes,
         "debug": {
-            "agree_score": agree_score + strong_agree_score,
+            "agree_score": combined_agree_score,
             "reject_score": reject_score,
             "redirect_score": redirect_score,
             "unsure_score": unsure_score,
@@ -620,6 +643,8 @@ def classify_hypothesis_reaction(
             "selected_thread_previously_rejected": selected_thread_previously_rejected,
             "explicit_selected_thread_reference": explicit_selected_thread_reference,
             "vague_open_clarification_agreement": vague_open_clarification_agreement,
+            "late_stage_context": late_stage_context,
+            "late_stage_soft_agree": late_stage_soft_agree,
             "tried_threads_context": tried_threads,
             "found_known_thread_terms": found_terms,
             "found_unknown_redirect_cue": bool(unsupported_text),
