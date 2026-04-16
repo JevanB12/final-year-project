@@ -33,6 +33,26 @@ AGREE_CUES = {
     "i think so",
     "it fits",
     "true",
+    "thats gotta be it",
+    "that's gotta be it",
+    "gotta be it",
+    "that has to be it",
+    "thats it",
+    "that's it",
+    "to be honest",
+}
+
+STRONG_AGREE_CUES = {
+    "thats gotta be it",
+    "that's gotta be it",
+    "gotta be it",
+    "that has to be it",
+    "thats it",
+    "that's it",
+    "exactly",
+    "spot on",
+    "for sure",
+    "definitely",
 }
 
 REJECT_CUES = {
@@ -465,6 +485,7 @@ def classify_hypothesis_reaction(
     tried_threads = [thread for thread in (tried_threads or []) if thread in SUPPORTED_THREADS]
 
     agree_score, agree_matches = _count_cue_hits(normalized, AGREE_CUES)
+    strong_agree_score, strong_agree_matches = _count_cue_hits(normalized, STRONG_AGREE_CUES)
     reject_score, reject_matches = _count_cue_hits(normalized, REJECT_CUES)
     unsure_score, unsure_matches = _count_cue_hits(normalized, UNSURE_CUES)
     redirect_cue_score, redirect_cue_matches = _count_cue_hits(normalized, REDIRECT_CUES)
@@ -536,11 +557,14 @@ def classify_hypothesis_reaction(
                 redirected_text = unsupported_text
                 redirect_supported = False
                 notes.append("User moved away from selected thread and pointed to an unsupported issue.")
+    elif strong_agree_score > 0 and selected_thread:
+        reaction = "agree"
+        notes.append("Strong agreement language confirmed the current hypothesis thread.")
     elif reject_score > unsure_score and not has_redirect_target:
         reaction = "reject"
         notes.append("Rejection stronger than uncertainty.")
     elif soft_agree:
-        if selected_thread_previously_rejected and not explicit_selected_thread_reference:
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0:
             reaction = "unsure"
             notes.append(
                 "Current thread was previously rejected; soft agreement ignored without explicit thread mention."
@@ -549,7 +573,7 @@ def classify_hypothesis_reaction(
             reaction = "agree"
             notes.append("User showed soft agreement with the current thread.")
     elif agree_score > 0 and reject_score == 0 and unsure_score == 0 and selected_thread:
-        if selected_thread_previously_rejected and not explicit_selected_thread_reference:
+        if selected_thread_previously_rejected and not explicit_selected_thread_reference and strong_agree_score == 0:
             reaction = "unsure"
             notes.append(
                 "Current thread was previously rejected; plain agreement ignored without explicit thread mention."
@@ -567,8 +591,11 @@ def classify_hypothesis_reaction(
         reaction = "unsure"
         notes.append("Signals were weak or ambiguous; defaulted to unsure.")
 
-    primary = max(agree_score, reject_score, redirect_score, unsure_score)
-    secondary = sorted([agree_score, reject_score, redirect_score, unsure_score], reverse=True)[1]
+    primary = max(agree_score + strong_agree_score, reject_score, redirect_score, unsure_score)
+    secondary = sorted(
+        [agree_score + strong_agree_score, reject_score, redirect_score, unsure_score],
+        reverse=True,
+    )[1]
 
     return {
         "reaction": reaction,
@@ -577,14 +604,14 @@ def classify_hypothesis_reaction(
         "redirect_supported": redirect_supported,
         "confidence": _compute_confidence(primary, secondary, reaction),
         "matched_signals": {
-            "agree": sorted(set(agree_matches + soft_agree_matches)),
+            "agree": sorted(set(agree_matches + strong_agree_matches + soft_agree_matches)),
             "reject": sorted(set(reject_matches + downplay_matches + positive_state_matches)),
             "redirect": sorted(set(redirect_cue_matches + found_terms)),
             "unsure": sorted(set(unsure_matches)),
         },
         "notes": notes,
         "debug": {
-            "agree_score": agree_score,
+            "agree_score": agree_score + strong_agree_score,
             "reject_score": reject_score,
             "redirect_score": redirect_score,
             "unsure_score": unsure_score,
