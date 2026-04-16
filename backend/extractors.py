@@ -55,6 +55,22 @@ CONTRAST_CUES = {
     "however",
 }
 
+INTERNAL_DISCOMFORT_CUES = {
+    "doesn't feel right",
+    "doesnt feel right",
+    "something feels off",
+    "something feels wrong",
+    "feel off",
+    "feel wrong",
+    "inside",
+    "internally",
+    "mentally off",
+    "emotionally off",
+    "not okay inside",
+    "doesn't sit right",
+    "doesnt sit right",
+}
+
 
 def detect_strain(text: str) -> bool:
     return any(cue in text for cue in STRAIN_CUES)
@@ -66,6 +82,10 @@ def detect_strong_distress(text: str) -> bool:
 
 def detect_contrast(text: str) -> bool:
     return any(cue in text for cue in CONTRAST_CUES)
+
+
+def detect_internal_discomfort(text: str) -> bool:
+    return any(cue in text for cue in INTERNAL_DISCOMFORT_CUES)
 
 
 def normalize_text(text: str) -> str:
@@ -122,6 +142,10 @@ def extract_sentiment(text: str) -> Tuple[float, float]:
         if cue in text:
             neg_score += 2.5
 
+    for cue in INTERNAL_DISCOMFORT_CUES:
+        if cue in text:
+            neg_score += 2.0
+
     if neg_score > 0:
         for cue, weight in support_cues.items():
             if cue in text:
@@ -136,14 +160,23 @@ def extract_tone(
     strain_detected: bool = False,
     strong_distress: bool = False,
     contrast_detected: bool = False,
+    internal_discomfort: bool = False,
 ) -> str:
     if pos == 0 and neg == 0:
         return "neutral"
+
+    if contrast_detected and internal_discomfort:
+        if pos > 0:
+            return "mixed"
+        return "negative"
 
     if strong_distress and pos > 0:
         return "mixed"
 
     if contrast_detected and strong_distress:
+        return "mixed"
+
+    if internal_discomfort and pos > 0:
         return "mixed"
 
     if strain_detected and pos > neg and neg > 0:
@@ -154,6 +187,9 @@ def extract_tone(
 
     if pos > 0 and neg > 0 and strong_distress:
         return "mixed"
+
+    if neg > pos:
+        return "negative"
 
     if pos > neg:
         return "positive"
@@ -219,5 +255,9 @@ def extract_points(text: str):
     for phrase in negative_phrases:
         if phrase in text and phrase not in negatives:
             negatives.append(phrase)
+
+    for cue in INTERNAL_DISCOMFORT_CUES:
+        if cue in text and cue not in negatives:
+            negatives.append(cue)
 
     return positives, negatives

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from extractors import (
     detect_contrast,
+    detect_internal_discomfort,
     detect_strain,
     detect_strong_distress,
     extract_intensity,
@@ -85,6 +86,7 @@ def chat(payload: Message):
     strain = detect_strain(text)
     strong_distress = detect_strong_distress(text)
     contrast = detect_contrast(text)
+    internal_discomfort = detect_internal_discomfort(text)
 
     tone = extract_tone(
         pos,
@@ -92,6 +94,7 @@ def chat(payload: Message):
         strain_detected=strain,
         strong_distress=strong_distress,
         contrast_detected=contrast,
+        internal_discomfort=internal_discomfort,
     )
 
     word_count = len(tokenize(text))
@@ -99,7 +102,7 @@ def chat(payload: Message):
 
     if strong_distress:
         intensity = max(intensity, 0.45)
-    elif strain:
+    elif strain or internal_discomfort:
         intensity = max(intensity, 0.25)
 
     themes = extract_themes(text)
@@ -155,6 +158,7 @@ def chat(payload: Message):
             "strain_detected": strain,
             "strong_distress_detected": strong_distress,
             "contrast_detected": contrast,
+            "internal_discomfort_detected": internal_discomfort,
             "positive_reflection_mode": positive_reflection_mode,
         },
     }
