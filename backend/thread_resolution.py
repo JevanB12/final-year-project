@@ -381,7 +381,7 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _build_guided_question(selected_thread),
+            "next_question": GENERIC_GUIDED_QUESTION,
             "tried_threads": updated_tried_threads,
             "candidate_threads": candidates,
             "rejected_threads": updated_rejected_threads,
@@ -392,7 +392,7 @@ def resolve_thread(
             "response": _build_reject_response(alternative_thread, selected_thread),
             "notes": [
                 "User rejected the current hypothesis.",
-                "Switching to a simpler guided narrowing question instead of open exploration.",
+                "Using a neutral guided clarification question instead of repeating the rejected thread.",
             ],
         }
 
@@ -512,7 +512,7 @@ def resolve_thread(
             "resolved_thread": None,
             "next_thread": None,
             "resolution_status": "needs_clarification",
-            "next_question": _build_guided_question(selected_thread),
+            "next_question": GENERIC_GUIDED_QUESTION,
             "tried_threads": updated_tried_threads,
             "candidate_threads": candidates,
             "rejected_threads": updated_rejected_threads,
@@ -522,7 +522,7 @@ def resolve_thread(
             "reaction_status": "unsure",
             "response": _build_unsure_response(selected_thread, secondary_thread),
             "notes": [
-                "User was unsure, so the system used a guided narrowing question instead of open exploration."
+                "User was unsure, so the system used a neutral guided clarification question instead of repeating the current thread."
             ],
         }
 
