@@ -69,8 +69,6 @@ export function useChatFlow() {
     setCandidateSubIssues([]);
     setSubIssue(null);
     setSuggestionTarget(null);
-    setAvatarTone("neutral");
-    setAvatarIntensity(0);
   };
 
   const runSubIssueSuggestionAndAction = async (
@@ -210,6 +208,10 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
           text: closingReply(userMessage),
         },
       ]);
+
+      setAvatarTone("positive");
+      setAvatarIntensity(0.35);
+
       setInput("");
       setConversationComplete(false);
       resetFlowState();
@@ -225,6 +227,10 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
           text: positiveFollowUpReply(userMessage),
         },
       ]);
+
+      setAvatarTone("positive");
+      setAvatarIntensity(0.3);
+
       setInput("");
       setConversationComplete(true);
       setConversationMode("resolved_thread");
