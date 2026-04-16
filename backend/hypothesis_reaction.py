@@ -47,6 +47,13 @@ REJECT_CUES = {
     "not the issue",
     "has been fine",
     "been fine",
+    "not low energy",
+    "not tired",
+    "not exhausted",
+    "sleep has been fine",
+    "sleep has been good",
+    "my sleep has been fine",
+    "my sleep has been good",
 }
 
 UNSURE_CUES = {
@@ -76,6 +83,8 @@ REDIRECT_CUES = {
     "it's mostly",
     "its mainly",
     "it's mainly",
+    "more mental",
+    "more physical",
 }
 
 LEANING_ACCEPT_CUES = {
@@ -98,11 +107,6 @@ OPEN_CLARIFICATION_VAGUE_CUES = {
     "a little",
     "a bit",
     "maybe",
-    "more mental",
-    "more physical",
-    "pressure",
-    "tiredness",
-    "switch off",
 }
 
 THREAD_KEYWORDS = {
@@ -112,6 +116,7 @@ THREAD_KEYWORDS = {
         "tired",
         "tiredness",
         "energy",
+        "low energy",
         "exhausted",
         "drained",
         "fatigue",
@@ -134,6 +139,13 @@ THREAD_KEYWORDS = {
         "coursework",
         "exam",
         "pressure",
+        "mental",
+        "mind",
+        "mind keeps going",
+        "switch off",
+        "can't switch off",
+        "cant switch off",
+        "overthinking",
     },
     "physical_activity": {
         "activity",
@@ -146,6 +158,8 @@ THREAD_KEYWORDS = {
         "sports",
         "running",
         "recovery",
+        "physical",
+        "body",
     },
     "meals_regularity": {
         "meal",
@@ -170,6 +184,7 @@ THREAD_KEYWORDS = {
         "breathing room",
         "downtime",
         "one thing after another",
+        "full on",
     },
 }
 
@@ -234,26 +249,11 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
     matched = []
     selected_terms = THREAD_KEYWORDS.get(selected_thread, set())
 
-    negators = {
-        "not",
-        "isnt",
-        "isn't",
-        "wasnt",
-        "wasn't",
-        "dont",
-        "don't",
-        "not really",
-        "not the",
-    }
-
-    # Direct negation of selected-thread terms
     for term in selected_terms:
         normalized_term = term.strip()
-
         if not normalized_term:
             continue
 
-        # Exact and near-exact negation patterns
         patterns = [
             f"not {normalized_term}",
             f"not really {normalized_term}",
@@ -270,7 +270,6 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
                 score += 2
                 matched.append(pattern)
 
-        # Catch phrases like "not low energy", "not tired", "not exhausted"
         words = normalized_term.split()
         if words:
             first_word = words[0]
@@ -278,7 +277,6 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
                 score += 2
                 matched.append(f"not {normalized_term}")
 
-    # More general rejection / downplay cues
     downplay_phrases = {
         "not really",
         "dont think",
@@ -296,7 +294,6 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
             score += 1
             matched.append(phrase)
 
-    # Strong special-case handling for sleep/energy wording
     if selected_thread == "sleep_rest":
         sleep_downplays = [
             "not low energy",
@@ -317,6 +314,7 @@ def _selected_downplay_score(text: str, selected_thread: str) -> tuple[int, List
                 matched.append(phrase)
 
     return score, sorted(set(matched))
+
 
 def _soft_agree_with_current_thread(
     text: str,
@@ -370,7 +368,11 @@ def detect_known_redirect_threads(reply_text: str, selected_thread: str) -> List
     return sorted(found_threads)
 
 
-def extract_unsupported_redirect_text(reply_text: str, selected_thread: str, found_threads: List[str]) -> str | None:
+def extract_unsupported_redirect_text(
+    reply_text: str,
+    selected_thread: str,
+    found_threads: List[str],
+) -> str | None:
     text = normalize_reaction_text(reply_text)
     if found_threads:
         return None
@@ -404,7 +406,12 @@ def extract_unsupported_redirect_text(reply_text: str, selected_thread: str, fou
     return None
 
 
-def is_agree_with_explanation(reply_text: str, selected_thread: str, found_threads: list, agree_score: int) -> bool:
+def is_agree_with_explanation(
+    reply_text: str,
+    selected_thread: str,
+    found_threads: list,
+    agree_score: int,
+) -> bool:
     if agree_score == 0 or not selected_thread or not found_threads:
         return False
     text = reply_text.lower()
@@ -472,6 +479,9 @@ def classify_hypothesis_reaction(
     positive_state_score, positive_state_matches = _selected_positive_state_score(normalized, selected_thread)
     unsupported_text = extract_unsupported_redirect_text(normalized, selected_thread, found_threads)
 
+    reject_score += downplay_score
+    reject_score += positive_state_score
+
     redirect_score = redirect_cue_score
     if found_threads:
         redirect_score += 2
@@ -479,8 +489,6 @@ def classify_hypothesis_reaction(
         redirect_score += 2
     if downplay_score > 0:
         redirect_score += 1
-
-    reject_score += positive_state_score
 
     notes: List[str] = []
     selected_thread_previously_rejected = bool(selected_thread and selected_thread in tried_threads)
@@ -490,6 +498,7 @@ def classify_hypothesis_reaction(
 
     has_redirect_target = bool(found_threads) or bool(unsupported_text)
     move_away_signal = downplay_score > 0 or reject_score > 0 or redirect_cue_score > 0
+    guided_option_answer = no_active_selected_thread and bool(found_threads)
 
     soft_agree, soft_agree_matches = _soft_agree_with_current_thread(
         text=normalized,
@@ -505,7 +514,12 @@ def classify_hypothesis_reaction(
     redirected_text: Optional[str] = None
     redirect_supported = False
 
-    if no_active_selected_thread and vague_open_clarification_agreement and not has_redirect_target:
+    if guided_option_answer:
+        reaction = "redirect"
+        redirected_thread = found_threads[0]
+        redirect_supported = True
+        notes.append("Guided clarification answer mapped directly to a supported thread.")
+    elif no_active_selected_thread and vague_open_clarification_agreement and not has_redirect_target:
         reaction = "unsure"
         notes.append("No active hypothesis thread; vague agreement treated as open clarification signal.")
     elif has_redirect_target and move_away_signal:
@@ -580,5 +594,7 @@ def classify_hypothesis_reaction(
             "explicit_selected_thread_reference": explicit_selected_thread_reference,
             "vague_open_clarification_agreement": vague_open_clarification_agreement,
             "tried_threads_context": tried_threads,
+            "found_known_thread_terms": found_terms,
+            "found_unknown_redirect_cue": bool(unsupported_text),
         },
     }

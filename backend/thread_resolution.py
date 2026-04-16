@@ -19,19 +19,19 @@ THREAD_SOFT_PHRASES = {
 }
 
 GUIDED_NARROWING_QUESTIONS = {
-    "work_study_routine": "Alright — would you say it feels more like pressure in the moment, or more like your mind doesn’t really switch off afterwards?",
-    "sleep_rest": "Alright — would you say it feels more like low energy physically, or more like your mind keeps going even when you’re trying to rest?",
-    "daily_structure": "Alright — does it feel more like the day has been too full on, or more like there hasn’t been enough proper downtime?",
-    "physical_activity": "Alright — does it feel more like physical tiredness in your body, or more like a mental heaviness?",
-    "meals_regularity": "Alright — does it feel more like low energy from not eating properly, or more like something else has been weighing on you?",
+    "work_study_routine": "Alright — does it feel like your mind keeps going, even when you're trying to switch off?",
+    "sleep_rest": "Alright — does it feel more like low energy or tiredness physically?",
+    "daily_structure": "Alright — does it feel like the day has just been too full on?",
+    "physical_activity": "Alright — does it feel more like physical heaviness or low movement in your body?",
+    "meals_regularity": "Alright — does it feel like not eating properly has been affecting your energy?",
 }
 
 GENERIC_GUIDED_QUESTION = (
-    "Alright — would you say it feels more like pressure, tiredness, or difficulty switching off?"
+    "Alright — does it feel more mental than physical?"
 )
 
 THREAD_HINT_TERMS = {
-    "work_study_routine": {"work", "study", "deadline", "assignment", "pressure", "coursework"},
+    "work_study_routine": {"work", "study", "deadline", "assignment", "pressure", "coursework", "mental", "mind"},
     "sleep_rest": {"sleep", "rest", "tired", "exhausted", "drained", "energy"},
     "daily_structure": {"routine", "schedule", "structure", "busy", "nonstop", "downtime"},
     "physical_activity": {"exercise", "activity", "workout", "gym", "movement", "training", "physical"},
@@ -52,18 +52,19 @@ GUIDED_THREAD_SIGNALS = {
         "switching off",
         "switch off",
         "mind keeps going",
-        "overthinking",
         "can't relax",
         "cant relax",
+        "mental",
+        "mind",
     },
     "sleep_rest": {
         "tired",
         "tiredness",
         "low energy",
-        "rest",
         "sleep",
         "drained",
         "exhausted",
+        "fatigue",
     },
     "daily_structure": {
         "full on",
@@ -83,6 +84,7 @@ GUIDED_THREAD_SIGNALS = {
         "exercise",
         "gym",
         "active",
+        "heavy",
     },
     "meals_regularity": {
         "food",
@@ -172,19 +174,56 @@ def _score_thread_from_guided_answer(text: str, thread: str) -> float:
 
     score = 0.0
 
+    positive_cues = {
+        "yes", "yeah", "yep", "definitely", "for sure", "i think so", "kind of", "a bit", "probably"
+    }
+    negative_cues = {
+        "no", "nah", "not really", "dont think so", "don't think so", "not at all"
+    }
+
+    has_positive = any(cue in normalized for cue in positive_cues)
+    has_negative = any(cue in normalized for cue in negative_cues)
+
     for cue in GUIDED_THREAD_SIGNALS.get(thread, set()):
         if cue in normalized:
             score += 1.0
 
-    if thread == "work_study_routine":
-        if "switch off" in normalized or "overthinking" in normalized or "pressure" in normalized:
-            score += 1.0
-    if thread == "sleep_rest":
-        if "low energy" in normalized or "tired" in normalized or "drained" in normalized:
-            score += 1.0
-    if thread == "physical_activity":
-        if "physical" in normalized or "body" in normalized:
-            score += 1.0
+    mental_cues = {
+        "mental",
+        "mind",
+        "mind keeps going",
+        "overthinking",
+        "switch off",
+        "can't switch off",
+        "cant switch off",
+        "pressure",
+    }
+    physical_cues = {
+        "physical",
+        "tired",
+        "tiredness",
+        "low energy",
+        "drained",
+        "exhausted",
+        "heavy",
+    }
+
+    if any(cue in normalized for cue in mental_cues):
+        if thread == "work_study_routine":
+            score += 2.5
+        if thread == "sleep_rest":
+            score -= 1.0
+
+    if any(cue in normalized for cue in physical_cues):
+        if thread == "sleep_rest":
+            score += 2.5
+        if thread == "work_study_routine":
+            score -= 1.0
+
+    if has_positive:
+        score += 1.0
+    if has_negative:
+        score -= 1.5
 
     return score
 
@@ -417,11 +456,9 @@ def resolve_thread(
             )
 
             best_thread = scored[0][0] if scored else None
-            best_score = scored[0][1] if scored else 0.0
 
             if explicit_reintroduced:
                 best_thread = explicit_reintroduced
-                best_score = max(best_score, 1.0)
 
             if best_thread:
                 return {
