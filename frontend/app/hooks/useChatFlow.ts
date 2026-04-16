@@ -32,8 +32,8 @@ export function useChatFlow() {
     { sender: "assistant", text: "Hey — how's your day been?" },
   ]);
   const [loading, setLoading] = useState(false);
-  const [avatarTone, setAvatarTone] = useState("neutral");
-  const [avatarIntensity, setAvatarIntensity] = useState(0);
+  const [avatarTone, setAvatarTone] = useState("positive");
+  const [avatarIntensity, setAvatarIntensity] = useState(0.2);
 
   const [conversationMode, setConversationMode] =
     useState<ConversationMode>("awaiting_initial_day_message");
