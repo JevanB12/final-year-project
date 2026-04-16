@@ -118,6 +118,8 @@ def chat(payload: Message):
         thread_scores = {}
         thread_evidence = {}
 
+    positive_reflection_mode = tone == "positive" and not negative_points
+
     reply = generate_iteration2_reply(
         tone=tone,
         themes=themes,
@@ -140,6 +142,8 @@ def chat(payload: Message):
         "future_lane": future_lane,
         "thread_scores": thread_scores,
         "thread_evidence": thread_evidence,
+        "conversation_type": "positive_reflection" if positive_reflection_mode else "problem_resolution",
+        "expects_reaction_classification": not positive_reflection_mode,
         "avatar": {
             "tone": tone,
             "intensity": intensity,
@@ -151,6 +155,7 @@ def chat(payload: Message):
             "strain_detected": strain,
             "strong_distress_detected": strong_distress,
             "contrast_detected": contrast,
+            "positive_reflection_mode": positive_reflection_mode,
         },
     }
 

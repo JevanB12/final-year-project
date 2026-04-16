@@ -6,6 +6,7 @@ import Avatar from "./components/Avatar";
 type ChatResponse = {
   reply: string;
   emotion: string;
+  tone: string;
   intensity: number;
   themes: string[];
   positive_points: string[];
@@ -14,6 +15,12 @@ type ChatResponse = {
   future_lane: string | null;
   thread_scores?: Record<string, number>;
   thread_evidence?: Record<string, string[]>;
+  conversation_type?: "positive_reflection" | "problem_resolution";
+  expects_reaction_classification?: boolean;
+  avatar?: {
+    tone: string;
+    intensity: number;
+  };
   debug: {
     pos_score: number;
     neg_score: number;
@@ -21,6 +28,7 @@ type ChatResponse = {
     strain_detected?: boolean;
     strong_distress_detected?: boolean;
     contrast_detected?: boolean;
+    positive_reflection_mode?: boolean;
     classification?: {
       label?: string;
       confidence?: number | string;
@@ -182,6 +190,39 @@ function closingReply(userText: string) {
   return "That makes sense — we can leave it there for now. Feel free to come back to this anytime.";
 }
 
+function positiveFollowUpReply(userText: string) {
+  const text = userText.toLowerCase();
+
+  if (
+    text.includes("routine") ||
+    text.includes("momentum") ||
+    text.includes("consistent") ||
+    text.includes("structure")
+  ) {
+    return "That’s great to hear — it sounds like your routine and momentum are really working for you right now. Keeping that going seems to be helping a lot. Hope the rest of your day goes well.";
+  }
+
+  if (
+    text.includes("workout") ||
+    text.includes("gym") ||
+    text.includes("exercise") ||
+    text.includes("training")
+  ) {
+    return "That’s great to hear — it sounds like staying active has been giving you a really solid start to the day. If that’s helping, it’s definitely worth keeping up. Hope the rest of your day goes well.";
+  }
+
+  if (
+    text.includes("work") ||
+    text.includes("tasks") ||
+    text.includes("productive") ||
+    text.includes("focus")
+  ) {
+    return "That’s great to hear — it sounds like things are clicking into place for you right now. If that rhythm is working, it makes sense to keep leaning into it. Hope the rest of your day goes well.";
+  }
+
+  return "That’s really good to hear — it sounds like things have been working well for you lately. If what you’re doing is helping, it’s worth keeping that going. Hope the rest of your day goes well.";
+}
+
 export default function Home() {
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([
@@ -194,6 +235,7 @@ export default function Home() {
   const [conversationMode, setConversationMode] = useState<
     | "awaiting_reaction_to_hypothesis"
     | "awaiting_guided_clarification"
+    | "awaiting_positive_reflection"
     | "resolved_thread"
     | "awaiting_initial_day_message"
   >("awaiting_initial_day_message");
@@ -394,6 +436,22 @@ notes: ${actionData.notes?.join(" | ") || "none"}`;
       return;
     }
 
+    if (conversationMode === "awaiting_positive_reflection") {
+      setMessages((prev) => [
+        ...prev,
+        { sender: "user", text: userMessage },
+        {
+          sender: "assistant",
+          text: positiveFollowUpReply(userMessage),
+        },
+      ]);
+      setInput("");
+      setConversationComplete(true);
+      setConversationMode("resolved_thread");
+      setPendingSelectedThread(null);
+      return;
+    }
+
     setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
     setInput("");
     setLoading(true);
@@ -574,7 +632,10 @@ neg: ${data.debug?.neg_score ?? 0}
 words: ${data.debug?.word_count ?? 0}
 strain_detected: ${String(data.debug?.strain_detected ?? false)}
 strong_distress_detected: ${String(data.debug?.strong_distress_detected ?? false)}
-contrast_detected: ${String(data.debug?.contrast_detected ?? false)}`;
+contrast_detected: ${String(data.debug?.contrast_detected ?? false)}
+positive_reflection_mode: ${String(data.debug?.positive_reflection_mode ?? false)}
+conversation_type: ${data.conversation_type || "none"}
+expects_reaction_classification: ${String(data.expects_reaction_classification ?? true)}`;
 
         setMessages((prev) => [
           ...prev,
@@ -585,8 +646,8 @@ contrast_detected: ${String(data.debug?.contrast_detected ?? false)}`;
           },
         ]);
 
-        setAvatarTone(data.emotion || "neutral");
-        setAvatarIntensity(data.intensity || 0);
+        setAvatarTone(data.avatar?.tone || data.emotion || "neutral");
+        setAvatarIntensity(data.avatar?.intensity || data.intensity || 0);
 
         setConversationComplete(false);
         setThemes(data.themes || []);
@@ -602,7 +663,10 @@ contrast_detected: ${String(data.debug?.contrast_detected ?? false)}`;
         setSubIssue(null);
         setSuggestionTarget(null);
 
-        if (data.selected_thread) {
+        if (data.conversation_type === "positive_reflection" || data.expects_reaction_classification === false) {
+          setPendingSelectedThread(null);
+          setConversationMode("awaiting_positive_reflection");
+        } else if (data.selected_thread) {
           setPendingSelectedThread(data.selected_thread);
           setConversationMode("awaiting_reaction_to_hypothesis");
         } else {
@@ -702,6 +766,8 @@ contrast_detected: ${String(data.debug?.contrast_detected ?? false)}`;
                 ? "Reply to the assistant's hypothesis..."
                 : conversationMode === "awaiting_guided_clarification"
                 ? "Reply to the assistant's guided question..."
+                : conversationMode === "awaiting_positive_reflection"
+                ? "Reply with what's been helping..."
                 : "Type a message..."
             }
             className="flex-1 border rounded-lg px-4 py-2 placeholder-gray-500 text-gray-700"
