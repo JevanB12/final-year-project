@@ -131,6 +131,7 @@ def chat(payload: Message):
     return {
         "reply": reply,
         "emotion": tone,
+        "tone": tone,
         "intensity": intensity,
         "themes": themes,
         "positive_points": positive_points,
@@ -139,6 +140,10 @@ def chat(payload: Message):
         "future_lane": future_lane,
         "thread_scores": thread_scores,
         "thread_evidence": thread_evidence,
+        "avatar": {
+            "tone": tone,
+            "intensity": intensity,
+        },
         "debug": {
             "pos_score": pos,
             "neg_score": neg,

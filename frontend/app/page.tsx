@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Avatar from "./components/Avatar";
 
 type ChatResponse = {
   reply: string;
@@ -12,10 +13,14 @@ type ChatResponse = {
   selected_thread: string | null;
   future_lane: string | null;
   thread_scores?: Record<string, number>;
+  thread_evidence?: Record<string, string[]>;
   debug: {
     pos_score: number;
     neg_score: number;
     word_count: number;
+    strain_detected?: boolean;
+    strong_distress_detected?: boolean;
+    contrast_detected?: boolean;
     classification?: {
       label?: string;
       confidence?: number | string;
@@ -183,6 +188,8 @@ export default function Home() {
     { sender: "assistant", text: "Hey — how's your day been?" },
   ]);
   const [loading, setLoading] = useState(false);
+  const [avatarTone, setAvatarTone] = useState("neutral");
+  const [avatarIntensity, setAvatarIntensity] = useState(0);
 
   const [conversationMode, setConversationMode] = useState<
     | "awaiting_reaction_to_hypothesis"
@@ -248,6 +255,8 @@ export default function Home() {
     setCandidateSubIssues([]);
     setSubIssue(null);
     setSuggestionTarget(null);
+    setAvatarTone("neutral");
+    setAvatarIntensity(0);
   };
 
   const runSubIssueSuggestionAndAction = async (
@@ -552,6 +561,7 @@ future_lane: ${data.future_lane || "none"}
 positive_points: ${safeJoin(data.positive_points)}
 negative_points: ${safeJoin(data.negative_points)}
 thread_scores: ${data.thread_scores ? JSON.stringify(data.thread_scores) : "{}"}
+thread_evidence: ${data.thread_evidence ? JSON.stringify(data.thread_evidence) : "{}"}
 
 ${classification
   ? `classification.label: ${classification.label || "none"}
@@ -561,7 +571,10 @@ classification.reason: ${classification.reason || "none"}`
 
 pos: ${data.debug?.pos_score ?? 0}
 neg: ${data.debug?.neg_score ?? 0}
-words: ${data.debug?.word_count ?? 0}`;
+words: ${data.debug?.word_count ?? 0}
+strain_detected: ${String(data.debug?.strain_detected ?? false)}
+strong_distress_detected: ${String(data.debug?.strong_distress_detected ?? false)}
+contrast_detected: ${String(data.debug?.contrast_detected ?? false)}`;
 
         setMessages((prev) => [
           ...prev,
@@ -571,6 +584,9 @@ words: ${data.debug?.word_count ?? 0}`;
             meta,
           },
         ]);
+
+        setAvatarTone(data.emotion || "neutral");
+        setAvatarIntensity(data.intensity || 0);
 
         setConversationComplete(false);
         setThemes(data.themes || []);
@@ -624,10 +640,15 @@ words: ${data.debug?.word_count ?? 0}`;
   return (
     <main className="min-h-screen bg-gray-100 flex justify-center items-center p-6">
       <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6 flex flex-col h-[80vh]">
-        <h1 className="text-2xl font-semibold mb-1">Your wellbeing assistant</h1>
-        <p className="text-gray-500 mb-4 text-sm">
-          Talk about your day, your energy, or anything on your mind.
-        </p>
+        <div className="flex items-center gap-4 mb-2">
+          <Avatar tone={avatarTone} size={58} />
+          <div>
+            <h1 className="text-2xl font-semibold mb-1">Your wellbeing assistant</h1>
+            <p className="text-gray-500 text-sm">
+              Talk about your day, your energy, or anything on your mind.
+            </p>
+          </div>
+        </div>
 
         <div className="mb-3 text-xs text-gray-500">
           mode: {conversationComplete
@@ -637,6 +658,10 @@ words: ${data.debug?.word_count ?? 0}`;
             : conversationMode === "awaiting_reaction_to_hypothesis" && pendingSelectedThread
             ? `awaiting_reaction_to_hypothesis: ${pendingSelectedThread}`
             : conversationMode}
+          {" | "}
+          avatar_emotion: {avatarTone}
+          {" | "}
+          avatar_intensity: {avatarIntensity.toFixed(2)}
         </div>
 
         <div className="flex-1 overflow-y-auto border rounded-lg p-4 mb-4 bg-gray-50">
