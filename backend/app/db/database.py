@@ -1,10 +1,13 @@
-"""Database connection helpers (stub — wire SQLite/SQLAlchemy when ready)."""
+from sqlalchemy import create_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
-from pathlib import Path
+DATABASE_URL = "sqlite:///./wellbeing.db"
 
-BACKEND_ROOT = Path(__file__).resolve().parents[2]
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False},
+)
 
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_db_path() -> Path:
-    """Default SQLite file at backend/wellbeing.db."""
-    return BACKEND_ROOT / "wellbeing.db"
+Base = declarative_base()

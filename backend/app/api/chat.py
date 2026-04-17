@@ -1,9 +1,13 @@
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.chat.responses import generate_iteration2_reply
+from app.chat.scoring import compute_day_score
+from app.db.crud import create_checkin
+from app.db.database import SessionLocal
 from app.nlp.extractors import (
     detect_contrast,
     detect_internal_discomfort,
@@ -119,6 +123,15 @@ def chat(payload: Message):
 
     positive_reflection_mode = tone == "positive" and not negative_points
 
+    day_score = compute_day_score(
+        tone=tone,
+        pos=pos,
+        neg=neg,
+        strain_detected=strain,
+        strong_distress_detected=strong_distress,
+        intensity=intensity,
+    )
+
     reply = generate_iteration2_reply(
         tone=tone,
         themes=themes,
@@ -128,6 +141,26 @@ def chat(payload: Message):
         negative_points=negative_points,
         strain_detected=strain,
     )
+
+    db = SessionLocal()
+    try:
+        create_checkin(
+            db,
+            user_id=1,
+            checkin_date=date.today(),
+            raw_message=raw_text,
+            tone=tone,
+            intensity=intensity,
+            selected_thread=selected_thread,
+            day_score=day_score,
+            strain_detected=strain,
+            strong_distress_detected=strong_distress,
+            themes=themes,
+            positive_points=positive_points,
+            negative_points=negative_points,
+        )
+    finally:
+        db.close()
 
     return {
         "reply": reply,
@@ -141,6 +174,7 @@ def chat(payload: Message):
         "future_lane": future_lane,
         "thread_scores": thread_scores,
         "thread_evidence": thread_evidence,
+        "day_score": day_score,
         "conversation_type": "positive_reflection" if positive_reflection_mode else "problem_resolution",
         "expects_reaction_classification": not positive_reflection_mode,
         "avatar": {
@@ -161,7 +195,7 @@ def chat(payload: Message):
 
 
 @router.post("/classify-reaction")
-def classify_reaction(payload: ReactionPayload):
+def classify_reaction_endpoint(payload: ReactionPayload):
     return classify_hypothesis_reaction(
         reply_text=payload.reply,
         selected_thread=payload.selected_thread,

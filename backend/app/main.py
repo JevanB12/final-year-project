@@ -2,6 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import analytics, chat
+from app.db.database import Base, engine
+
+# create DB tables on startup
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
