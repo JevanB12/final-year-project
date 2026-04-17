@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { getJson } from "../lib/api";
 import {
@@ -7,6 +8,10 @@ import {
   AnalyticsSummaryResponse,
   AnalyticsTimelineResponse,
 } from "../types/analytics";
+
+function formatLabel(value: string) {
+  return value.replaceAll("_", " ");
+}
 
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<AnalyticsSummaryResponse | null>(null);
@@ -54,7 +59,16 @@ export default function AnalyticsPage() {
   if (error) {
     return (
       <main className="min-h-screen bg-gray-100 p-6">
-        <div className="max-w-5xl mx-auto">
+        <div className="max-w-5xl mx-auto space-y-4">
+          <div className="flex justify-between items-center">
+            <Link
+              href="/"
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            >
+              Back to Chat
+            </Link>
+          </div>
+
           <div className="bg-white rounded-2xl shadow-lg p-6 text-red-600">
             {error}
           </div>
@@ -67,10 +81,21 @@ export default function AnalyticsPage() {
     <main className="min-h-screen bg-gray-100 p-6">
       <div className="max-w-5xl mx-auto space-y-6">
         <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-          <p className="text-gray-600 mt-2">
-            Overview of saved wellbeing check-ins and recent trends.
-          </p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
+              <p className="text-gray-600 mt-2">
+                Overview of saved wellbeing check-ins and recent trends.
+              </p>
+            </div>
+
+            <Link
+              href="/"
+              className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition self-start"
+            >
+              Back to Chat
+            </Link>
+          </div>
         </div>
 
         {summary && (
@@ -125,7 +150,9 @@ export default function AnalyticsPage() {
                       key={item.label}
                       className="flex justify-between border-b border-gray-100 pb-2"
                     >
-                      <span className="text-gray-700">{item.label}</span>
+                      <span className="text-gray-700 capitalize">
+                        {formatLabel(item.label)}
+                      </span>
                       <span className="font-medium text-gray-900">{item.count}</span>
                     </div>
                   ))
@@ -198,7 +225,7 @@ export default function AnalyticsPage() {
 
                     <div className="text-sm text-gray-700">
                       <p>Score: {item.day_score}</p>
-                      <p>Thread: {item.selected_thread ?? "none"}</p>
+                      <p>Thread: {item.selected_thread ? formatLabel(item.selected_thread) : "none"}</p>
                     </div>
                   </div>
                 ))
@@ -224,16 +251,31 @@ export default function AnalyticsPage() {
                         </p>
                       </div>
                       <p className="text-sm text-gray-600">
-                        Thread: {item.selected_thread ?? "none"}
+                        Thread: {item.selected_thread ? formatLabel(item.selected_thread) : "none"}
                       </p>
                     </div>
 
                     <p className="mt-3 text-gray-800">{item.raw_message}</p>
 
                     <div className="mt-3 text-sm text-gray-600">
-                      <p>Themes: {item.themes.join(", ") || "none"}</p>
-                      <p>Positive points: {item.positive_points.join(", ") || "none"}</p>
-                      <p>Negative points: {item.negative_points.join(", ") || "none"}</p>
+                      <p>
+                        Themes:{" "}
+                        {item.themes.length > 0
+                          ? item.themes.map(formatLabel).join(", ")
+                          : "none"}
+                      </p>
+                      <p>
+                        Positive points:{" "}
+                        {item.positive_points.length > 0
+                          ? item.positive_points.join(", ")
+                          : "none"}
+                      </p>
+                      <p>
+                        Negative points:{" "}
+                        {item.negative_points.length > 0
+                          ? item.negative_points.join(", ")
+                          : "none"}
+                      </p>
                     </div>
                   </div>
                 ))
