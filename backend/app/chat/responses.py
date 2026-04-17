@@ -1,7 +1,8 @@
 import random
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from app.nlp.lexicons import soft_clarification_questions
+from app.nlp.extractors import extract_themes, normalize_text
 
 
 STRONG_NEGATIVE_CUES = {
@@ -62,6 +63,34 @@ POSITIVE_THEME_REFLECTIONS = {
     "daily_structure": "you've had a good routine going",
 }
 
+POSITIVE_CLOSING_BY_THREAD: Dict[str, str] = {
+    "sleep_rest": "That's great to hear — it sounds like better sleep and rest have been really helping.",
+    "meals_regularity": "That's great to hear — it sounds like keeping meals steady has really helped your energy.",
+    "physical_activity": "That's great to hear — it sounds like getting movement in has been making a real difference.",
+    "work_study_routine": "That's great to hear — it sounds like a steadier work and study rhythm has been helping.",
+    "daily_structure": "That's great to hear — it sounds like having more routine and structure has been helping.",
+}
+
+
+def _pick_supported_positive_thread(themes: List[str]) -> Optional[str]:
+    supported = [theme for theme in themes if theme in POSITIVE_CLOSING_BY_THREAD]
+    if len(supported) == 1:
+        return supported[0]
+    return None
+
+
+def generate_positive_closing_reply(
+    user_text: str, detected_thread: Optional[str] = None
+) -> str:
+    if detected_thread is None:
+        normalized = normalize_text(user_text)
+        detected_thread = _pick_supported_positive_thread(extract_themes(normalized))
+
+    if detected_thread and detected_thread in POSITIVE_CLOSING_BY_THREAD:
+        return POSITIVE_CLOSING_BY_THREAD[detected_thread]
+
+    return "That's good to hear — sounds like things have been going well. What do you think has been helping most?"
+
 
 def generate_positive_reflection(themes: List[str]) -> str:
     for theme in themes:
@@ -103,7 +132,10 @@ def generate_iteration2_reply(
     strain_detected: bool = False,
 ) -> str:
     if tone == "positive" and not negative_points:
-        return generate_positive_reflection(themes)
+        return generate_positive_closing_reply(
+            user_text=text,
+            detected_thread=_pick_supported_positive_thread(themes),
+        )
     if selected_thread is None:
         if tone == "negative":
             return random.choice(NEGATIVE_FALLBACK_RESPONSES)
