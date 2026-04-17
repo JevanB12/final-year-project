@@ -9,6 +9,46 @@ from sqlalchemy.orm import Session
 from app.db.models import DailyCheckin
 
 
+POSITIVE_POINT_EXCLUDE = {
+    "good",
+    "great",
+    "nice",
+    "fine",
+    "okay",
+    "ok",
+    "alright",
+}
+
+NEGATIVE_POINT_EXCLUDE = {
+    "a lot",
+    "bit",
+    "a bit",
+    "too much",
+    "quite a lot",
+}
+
+POSITIVE_POINT_LABEL_MAP = {
+    "productive": "productivity",
+    "rested": "rest",
+    "calm": "calmness",
+    "motivated": "motivation",
+    "energised": "energy",
+    "energized": "energy",
+}
+
+NEGATIVE_POINT_LABEL_MAP = {
+    "tired": "low energy",
+    "drained": "low energy",
+    "exhausted": "low energy",
+    "overwhelmed": "overwhelm",
+    "stressed": "stress",
+    "anxious": "anxiety",
+    "rough": "difficult day",
+    "behind": "falling behind",
+    "pressure": "pressure",
+}
+
+
 def create_checkin(
     db: Session,
     *,
@@ -77,13 +117,50 @@ def _loads_list(value: str | None) -> list[str]:
         return []
 
 
-def _top_items(rows: list[DailyCheckin], attr_name: str, top_n: int = 5) -> list[dict[str, Any]]:
+def _clean_point_label(
+    item: str,
+    *,
+    label_map: dict[str, str],
+    exclude: set[str],
+) -> str | None:
+    cleaned = item.strip().lower()
+    if not cleaned or cleaned in exclude:
+        return None
+    return label_map.get(cleaned, cleaned)
+
+
+def _top_items(
+    rows: list[DailyCheckin],
+    attr_name: str,
+    top_n: int = 5,
+    *,
+    label_map: dict[str, str] | None = None,
+    exclude: set[str] | None = None,
+) -> list[dict[str, Any]]:
     counter: Counter[str] = Counter()
+    label_map = label_map or {}
+    exclude = exclude or set()
 
     for row in rows:
         for item in _loads_list(getattr(row, attr_name, "[]")):
-            if isinstance(item, str) and item.strip():
-                counter[item.strip()] += 1
+            if not isinstance(item, str):
+                continue
+
+            cleaned = item.strip()
+            if not cleaned:
+                continue
+
+            if label_map or exclude:
+                final_label = _clean_point_label(
+                    cleaned,
+                    label_map=label_map,
+                    exclude=exclude,
+                )
+                if not final_label:
+                    continue
+                counter[final_label] += 1
+            else:
+                counter[cleaned] += 1
 
     return [{"label": label, "count": count} for label, count in counter.most_common(top_n)]
 
@@ -135,8 +212,20 @@ def build_summary(db: Session, *, user_id: int = 1) -> dict[str, Any]:
         "tone_counts_30_days": tone_counts_30,
         "most_common_tone_30_days": most_common_tone,
         "top_themes": _top_items(rows_30, "themes_json", top_n=5),
-        "top_positive_points": _top_items(rows_30, "positive_points_json", top_n=5),
-        "top_negative_points": _top_items(rows_30, "negative_points_json", top_n=5),
+        "top_positive_points": _top_items(
+            rows_30,
+            "positive_points_json",
+            top_n=5,
+            label_map=POSITIVE_POINT_LABEL_MAP,
+            exclude=POSITIVE_POINT_EXCLUDE,
+        ),
+        "top_negative_points": _top_items(
+            rows_30,
+            "negative_points_json",
+            top_n=5,
+            label_map=NEGATIVE_POINT_LABEL_MAP,
+            exclude=NEGATIVE_POINT_EXCLUDE,
+        ),
         "strain_days_30_days": strain_count_30,
         "checkin_streak": _current_streak(rows_30),
         "total_checkins_30_days": len(rows_30),
