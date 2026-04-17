@@ -15,6 +15,7 @@ export default function Home() {
     loading,
     avatarTone,
     avatarIntensity,
+    sendMessage,
     inputPlaceholder,
     statusText,
   } = useChatFlow();
