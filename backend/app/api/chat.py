@@ -1,10 +1,10 @@
 from typing import List, Optional
 
-from fastapi import FastAPI
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from fastapi.middleware.cors import CORSMiddleware
 
-from extractors import (
+from app.chat.responses import generate_iteration2_reply
+from app.nlp.extractors import (
     detect_contrast,
     detect_internal_discomfort,
     detect_strain,
@@ -17,23 +17,19 @@ from extractors import (
     normalize_text,
     tokenize,
 )
-from hypothesis_reaction import classify_hypothesis_reaction
-from responses import generate_iteration2_reply
-from thread_resolution import resolve_thread
-from thread_selector import get_future_lane, score_threads, select_thread, build_thread_evidence
-from sub_issue_resolution import resolve_sub_issue
-from suggestion_mapper import map_suggestion_target
-from action_generator import generate_action
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+from app.resolution.action_generator import generate_action
+from app.resolution.hypothesis_reaction import classify_hypothesis_reaction
+from app.resolution.sub_issue_resolution import resolve_sub_issue
+from app.resolution.suggestion_mapper import map_suggestion_target
+from app.resolution.thread_resolution import resolve_thread
+from app.resolution.thread_selector import (
+    build_thread_evidence,
+    get_future_lane,
+    score_threads,
+    select_thread,
 )
+
+router = APIRouter()
 
 
 class Message(BaseModel):
@@ -77,7 +73,7 @@ class ActionGenerationPayload(BaseModel):
     user_text: str = ""
 
 
-@app.post("/chat")
+@router.post("/chat")
 def chat(payload: Message):
     raw_text = payload.message
     text = normalize_text(raw_text)
@@ -164,7 +160,7 @@ def chat(payload: Message):
     }
 
 
-@app.post("/classify-reaction")
+@router.post("/classify-reaction")
 def classify_reaction(payload: ReactionPayload):
     return classify_hypothesis_reaction(
         reply_text=payload.reply,
@@ -173,7 +169,7 @@ def classify_reaction(payload: ReactionPayload):
     )
 
 
-@app.post("/resolve-thread")
+@router.post("/resolve-thread")
 def resolve_thread_endpoint(payload: ThreadResolutionPayload):
     return resolve_thread(
         selected_thread=payload.selected_thread,
@@ -188,7 +184,7 @@ def resolve_thread_endpoint(payload: ThreadResolutionPayload):
     )
 
 
-@app.post("/resolve-sub-issue")
+@router.post("/resolve-sub-issue")
 def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
     return resolve_sub_issue(
         resolved_thread=payload.resolved_thread,
@@ -198,7 +194,7 @@ def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
     )
 
 
-@app.post("/map-suggestion")
+@router.post("/map-suggestion")
 def map_suggestion_endpoint(payload: SuggestionMapPayload):
     return map_suggestion_target(
         resolved_thread=payload.resolved_thread,
@@ -206,7 +202,7 @@ def map_suggestion_endpoint(payload: SuggestionMapPayload):
     )
 
 
-@app.post("/generate-action")
+@router.post("/generate-action")
 def generate_action_endpoint(payload: ActionGenerationPayload):
     return generate_action(
         resolved_thread=payload.resolved_thread,

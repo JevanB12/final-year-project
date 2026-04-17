@@ -1,7 +1,7 @@
 import random
 from typing import List, Optional
 
-from lexicons import soft_clarification_questions
+from app.nlp.lexicons import soft_clarification_questions
 
 
 STRONG_NEGATIVE_CUES = {

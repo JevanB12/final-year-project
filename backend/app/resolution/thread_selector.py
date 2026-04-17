@@ -1,6 +1,6 @@
 from typing import Dict, List
 
-from lexicons import ongoing_cues, present_cues, thread_to_future_lane
+from app.nlp.lexicons import ongoing_cues, present_cues, thread_to_future_lane
 
 
 NON_ACTIONABLE_THEMES = {"social"}

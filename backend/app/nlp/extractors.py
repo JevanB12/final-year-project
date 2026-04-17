@@ -1,7 +1,7 @@
 import re
 from typing import List, Tuple
 
-from lexicons import (
+from app.nlp.lexicons import (
     NEGATION_WORDS,
     intensifiers,
     lack_phrases,

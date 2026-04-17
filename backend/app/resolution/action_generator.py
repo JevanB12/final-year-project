@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Tuple
 
-from extractors import normalize_text
+from app.nlp.extractors import normalize_text
 
 ActionTemplate = Tuple[str, str, str, float]
 

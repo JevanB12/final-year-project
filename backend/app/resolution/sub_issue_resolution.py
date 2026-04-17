@@ -1,6 +1,6 @@
 from typing import Dict, List, Set, Tuple
 
-from extractors import normalize_text
+from app.nlp.extractors import normalize_text
 
 LEANING_PHRASES: Tuple[str, ...] = (
     "leaning toward",
