@@ -15,44 +15,67 @@ export default function Home() {
     loading,
     avatarTone,
     avatarIntensity,
-    conversationComplete,
-    awaitingSubIssue,
-    conversationMode,
-    pendingSelectedThread,
-    resolvedThread,
-    sendMessage,
     inputPlaceholder,
     statusText,
   } = useChatFlow();
 
   return (
-    <main className="min-h-screen bg-gray-100 flex justify-center items-center p-6">
-      <div className="w-full max-w-2xl bg-white rounded-2xl shadow-lg p-6 flex flex-col h-[80vh]">
-        <div className="flex items-center justify-between mb-4">
-          <ChatHeader avatarTone={avatarTone} />
-          <Link
-            href="/analytics"
-            className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
-          >
-            View Analytics
-          </Link>
+    <main className="min-h-screen bg-slate-50 p-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-6 items-start">
+          <aside className="bg-white rounded-[28px] shadow-sm border border-slate-100 p-5 lg:sticky lg:top-6">
+            <p className="text-xs font-medium text-slate-400 uppercase tracking-[0.2em]">
+              Navigation
+            </p>
+
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl bg-slate-100 px-4 py-3">
+                <p className="text-sm font-medium text-slate-900">Chat</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  Daily check-in conversation
+                </p>
+              </div>
+
+              <Link
+                href="/analytics"
+                className="block rounded-2xl border border-slate-200 px-4 py-3 text-slate-700 hover:bg-slate-50 transition"
+              >
+                <p className="text-sm font-medium">Analytics</p>
+                <p className="text-xs text-slate-500 mt-1">
+                  View your recent progress
+                </p>
+              </Link>
+            </div>
+          </aside>
+
+          <section className="bg-white rounded-[28px] shadow-sm border border-slate-100 p-6 md:p-7 flex flex-col h-[82vh]">
+            <div className="mb-5">
+              <ChatHeader avatarTone={avatarTone} />
+            </div>
+
+            <div className="mb-5">
+              <ChatStatus
+                statusText={statusText}
+                avatarTone={avatarTone}
+                avatarIntensity={avatarIntensity}
+              />
+            </div>
+
+            <div className="flex-1 min-h-0">
+              <MessageList messages={messages} />
+            </div>
+
+            <div className="mt-5">
+              <ChatInput
+                input={input}
+                setInput={setInput}
+                onSend={sendMessage}
+                loading={loading}
+                placeholder={inputPlaceholder}
+              />
+            </div>
+          </section>
         </div>
-
-        <ChatStatus
-          statusText={statusText}
-          avatarTone={avatarTone}
-          avatarIntensity={avatarIntensity}
-        />
-
-        <MessageList messages={messages} />
-
-        <ChatInput
-          input={input}
-          setInput={setInput}
-          onSend={sendMessage}
-          loading={loading}
-          placeholder={inputPlaceholder}
-        />
       </div>
     </main>
   );
