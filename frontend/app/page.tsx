@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getJson } from "../lib/api";
+import { getJson } from "./lib/api";
 import {
   AnalyticsRecentResponse,
   AnalyticsSummaryResponse,
   AnalyticsTimelineResponse,
-} from "../types/analytics";
+} from "./types/analytics";
 
 export default function AnalyticsPage() {
   const [summary, setSummary] = useState<AnalyticsSummaryResponse | null>(null);
