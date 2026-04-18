@@ -86,7 +86,7 @@ def create_checkin(
     return checkin
 
 
-def get_recent_checkins(db: Session, *, user_id: int = 1, limit: int = 30) -> list[DailyCheckin]:
+def get_recent_checkins(db: Session, *, user_id: int, limit: int = 30) -> list[DailyCheckin]:
     return (
         db.query(DailyCheckin)
         .filter(DailyCheckin.user_id == user_id)
@@ -192,7 +192,7 @@ def _current_streak(rows: list[DailyCheckin]) -> int:
     return streak
 
 
-def build_summary(db: Session, *, user_id: int = 1) -> dict[str, Any]:
+def build_summary(db: Session, *, user_id: int) -> dict[str, Any]:
     rows_7 = get_checkins_since(db, user_id=user_id, days=7)
     rows_30 = get_checkins_since(db, user_id=user_id, days=30)
 
@@ -232,7 +232,7 @@ def build_summary(db: Session, *, user_id: int = 1) -> dict[str, Any]:
     }
 
 
-def build_timeline(db: Session, *, user_id: int = 1, days: int = 30) -> list[dict[str, Any]]:
+def build_timeline(db: Session, *, user_id: int, days: int = 30) -> list[dict[str, Any]]:
     rows = get_checkins_since(db, user_id=user_id, days=days)
 
     return [
@@ -249,7 +249,7 @@ def build_timeline(db: Session, *, user_id: int = 1, days: int = 30) -> list[dic
     ]
 
 
-def build_recent_checkins(db: Session, *, user_id: int = 1, limit: int = 10) -> list[dict[str, Any]]:
+def build_recent_checkins(db: Session, *, user_id: int, limit: int = 10) -> list[dict[str, Any]]:
     rows = get_recent_checkins(db, user_id=user_id, limit=limit)
 
     return [

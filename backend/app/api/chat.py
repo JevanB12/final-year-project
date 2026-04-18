@@ -1,13 +1,15 @@
 from datetime import date
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from app.auth.dependencies import get_current_user
 from app.chat.responses import generate_iteration2_reply
 from app.chat.scoring import compute_day_score
 from app.db.crud import create_checkin
 from app.db.database import SessionLocal
+from app.db.models import User
 from app.nlp.extractors import (
     detect_contrast,
     detect_internal_discomfort,
@@ -78,7 +80,7 @@ class ActionGenerationPayload(BaseModel):
 
 
 @router.post("/chat")
-def chat(payload: Message):
+def chat(payload: Message, current_user: User = Depends(get_current_user)):
     raw_text = payload.message
     text = normalize_text(raw_text)
 
@@ -146,7 +148,7 @@ def chat(payload: Message):
     try:
         create_checkin(
             db,
-            user_id=1,
+            user_id=current_user.id,
             checkin_date=date.today(),
             raw_message=raw_text,
             tone=tone,
@@ -195,7 +197,10 @@ def chat(payload: Message):
 
 
 @router.post("/classify-reaction")
-def classify_reaction_endpoint(payload: ReactionPayload):
+def classify_reaction_endpoint(
+    payload: ReactionPayload,
+    current_user: User = Depends(get_current_user),
+):
     return classify_hypothesis_reaction(
         reply_text=payload.reply,
         selected_thread=payload.selected_thread,
@@ -204,7 +209,10 @@ def classify_reaction_endpoint(payload: ReactionPayload):
 
 
 @router.post("/resolve-thread")
-def resolve_thread_endpoint(payload: ThreadResolutionPayload):
+def resolve_thread_endpoint(
+    payload: ThreadResolutionPayload,
+    current_user: User = Depends(get_current_user),
+):
     return resolve_thread(
         selected_thread=payload.selected_thread,
         reaction=payload.reaction,
@@ -219,7 +227,10 @@ def resolve_thread_endpoint(payload: ThreadResolutionPayload):
 
 
 @router.post("/resolve-sub-issue")
-def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
+def resolve_sub_issue_endpoint(
+    payload: SubIssueResolutionPayload,
+    current_user: User = Depends(get_current_user),
+):
     return resolve_sub_issue(
         resolved_thread=payload.resolved_thread,
         user_text=payload.user_text,
@@ -229,7 +240,10 @@ def resolve_sub_issue_endpoint(payload: SubIssueResolutionPayload):
 
 
 @router.post("/map-suggestion")
-def map_suggestion_endpoint(payload: SuggestionMapPayload):
+def map_suggestion_endpoint(
+    payload: SuggestionMapPayload,
+    current_user: User = Depends(get_current_user),
+):
     return map_suggestion_target(
         resolved_thread=payload.resolved_thread,
         sub_issue=payload.sub_issue,
@@ -237,7 +251,10 @@ def map_suggestion_endpoint(payload: SuggestionMapPayload):
 
 
 @router.post("/generate-action")
-def generate_action_endpoint(payload: ActionGenerationPayload):
+def generate_action_endpoint(
+    payload: ActionGenerationPayload,
+    current_user: User = Depends(get_current_user),
+):
     return generate_action(
         resolved_thread=payload.resolved_thread,
         sub_issue=payload.sub_issue,
