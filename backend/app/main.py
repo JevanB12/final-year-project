@@ -2,9 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import analytics, auth, chat
-from app.db.database import Base, engine
+from app.db.database import Base, engine, ensure_sqlite_sample_columns
 
 Base.metadata.create_all(bind=engine)
+ensure_sqlite_sample_columns()
 
 app = FastAPI()
 

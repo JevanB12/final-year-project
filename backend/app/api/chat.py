@@ -5,35 +5,16 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_current_user
+from app.chat.analysis import analyze_first_message
 from app.chat.responses import generate_iteration2_reply
-from app.chat.scoring import compute_day_score
 from app.db.crud import create_checkin
 from app.db.database import SessionLocal
 from app.db.models import User
-from app.nlp.extractors import (
-    detect_contrast,
-    detect_internal_discomfort,
-    detect_strain,
-    detect_strong_distress,
-    extract_intensity,
-    extract_points,
-    extract_sentiment,
-    extract_themes,
-    extract_tone,
-    normalize_text,
-    tokenize,
-)
 from app.resolution.action_generator import generate_action
 from app.resolution.hypothesis_reaction import classify_hypothesis_reaction
 from app.resolution.sub_issue_resolution import resolve_sub_issue
 from app.resolution.suggestion_mapper import map_suggestion_target
 from app.resolution.thread_resolution import resolve_thread
-from app.resolution.thread_selector import (
-    build_thread_evidence,
-    get_future_lane,
-    score_threads,
-    select_thread,
-)
 
 router = APIRouter()
 
@@ -82,66 +63,16 @@ class ActionGenerationPayload(BaseModel):
 @router.post("/chat")
 def chat(payload: Message, current_user: User = Depends(get_current_user)):
     raw_text = payload.message
-    text = normalize_text(raw_text)
-
-    pos, neg = extract_sentiment(text)
-    strain = detect_strain(text)
-    strong_distress = detect_strong_distress(text)
-    contrast = detect_contrast(text)
-    internal_discomfort = detect_internal_discomfort(text)
-
-    tone = extract_tone(
-        pos,
-        neg,
-        strain_detected=strain,
-        strong_distress=strong_distress,
-        contrast_detected=contrast,
-        internal_discomfort=internal_discomfort,
-    )
-
-    word_count = len(tokenize(text))
-    intensity = extract_intensity(pos, neg, raw_text, word_count)
-
-    if strong_distress:
-        intensity = max(intensity, 0.45)
-    elif strain or internal_discomfort:
-        intensity = max(intensity, 0.25)
-
-    themes = extract_themes(text)
-    positive_points, negative_points = extract_points(text)
-
-    thread_scores = score_threads(text, themes, positive_points, negative_points)
-    selected_thread = select_thread(thread_scores)
-    future_lane = get_future_lane(selected_thread)
-    thread_evidence = build_thread_evidence(text, themes, positive_points, negative_points)
-
-    _fatigue_words = {"tired", "exhausted", "drained", "no energy"}
-    _has_fatigue = any(word in text for word in _fatigue_words)
-    if tone == "neutral" and intensity < 0.2 and not negative_points and not _has_fatigue:
-        selected_thread = None
-        future_lane = None
-        thread_scores = {}
-        thread_evidence = {}
-
-    positive_reflection_mode = tone == "positive" and not negative_points
-
-    day_score = compute_day_score(
-        tone=tone,
-        pos=pos,
-        neg=neg,
-        strain_detected=strain,
-        strong_distress_detected=strong_distress,
-        intensity=intensity,
-    )
+    a = analyze_first_message(raw_text)
 
     reply = generate_iteration2_reply(
-        tone=tone,
-        themes=themes,
-        intensity=intensity,
-        selected_thread=selected_thread,
-        text=text,
-        negative_points=negative_points,
-        strain_detected=strain,
+        tone=a.tone,
+        themes=a.themes,
+        intensity=a.intensity,
+        selected_thread=a.selected_thread,
+        text=a.text,
+        negative_points=a.negative_points,
+        strain_detected=a.strain,
     )
 
     db = SessionLocal()
@@ -151,47 +82,51 @@ def chat(payload: Message, current_user: User = Depends(get_current_user)):
             user_id=current_user.id,
             checkin_date=date.today(),
             raw_message=raw_text,
-            tone=tone,
-            intensity=intensity,
-            selected_thread=selected_thread,
-            day_score=day_score,
-            strain_detected=strain,
-            strong_distress_detected=strong_distress,
-            themes=themes,
-            positive_points=positive_points,
-            negative_points=negative_points,
+            tone=a.tone,
+            intensity=a.intensity,
+            selected_thread=a.selected_thread,
+            day_score=a.day_score,
+            strain_detected=a.strain,
+            strong_distress_detected=a.strong_distress,
+            themes=a.themes,
+            positive_points=a.positive_points,
+            negative_points=a.negative_points,
+            is_sample=False,
+            seed_batch_id=None,
         )
     finally:
         db.close()
 
     return {
         "reply": reply,
-        "emotion": tone,
-        "tone": tone,
-        "intensity": intensity,
-        "themes": themes,
-        "positive_points": positive_points,
-        "negative_points": negative_points,
-        "selected_thread": selected_thread,
-        "future_lane": future_lane,
-        "thread_scores": thread_scores,
-        "thread_evidence": thread_evidence,
-        "day_score": day_score,
-        "conversation_type": "positive_reflection" if positive_reflection_mode else "problem_resolution",
-        "expects_reaction_classification": not positive_reflection_mode,
+        "emotion": a.tone,
+        "tone": a.tone,
+        "intensity": a.intensity,
+        "themes": a.themes,
+        "positive_points": a.positive_points,
+        "negative_points": a.negative_points,
+        "selected_thread": a.selected_thread,
+        "future_lane": a.future_lane,
+        "thread_scores": a.thread_scores,
+        "thread_evidence": a.thread_evidence,
+        "day_score": a.day_score,
+        "conversation_type": "positive_reflection"
+        if a.positive_reflection_mode
+        else "problem_resolution",
+        "expects_reaction_classification": not a.positive_reflection_mode,
         "avatar": {
-            "tone": tone,
-            "intensity": intensity,
+            "tone": a.tone,
+            "intensity": a.intensity,
         },
         "debug": {
-            "pos_score": pos,
-            "neg_score": neg,
-            "word_count": word_count,
-            "strain_detected": strain,
-            "strong_distress_detected": strong_distress,
-            "contrast_detected": contrast,
-            "internal_discomfort_detected": internal_discomfort,
-            "positive_reflection_mode": positive_reflection_mode,
+            "pos_score": a.pos,
+            "neg_score": a.neg,
+            "word_count": a.word_count,
+            "strain_detected": a.strain,
+            "strong_distress_detected": a.strong_distress,
+            "contrast_detected": a.contrast,
+            "internal_discomfort_detected": a.internal_discomfort,
+            "positive_reflection_mode": a.positive_reflection_mode,
         },
     }
 

@@ -38,4 +38,7 @@ class DailyCheckin(Base):
     positive_points_json: Mapped[str] = mapped_column(Text, default="[]")
     negative_points_json: Mapped[str] = mapped_column(Text, default="[]")
 
+    is_sample: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    seed_batch_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

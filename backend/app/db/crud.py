@@ -64,6 +64,8 @@ def create_checkin(
     themes: list[str],
     positive_points: list[str],
     negative_points: list[str],
+    is_sample: bool = False,
+    seed_batch_id: str | None = None,
 ) -> DailyCheckin:
     checkin = DailyCheckin(
         user_id=user_id,
@@ -78,6 +80,8 @@ def create_checkin(
         themes_json=json.dumps(themes),
         positive_points_json=json.dumps(positive_points),
         negative_points_json=json.dumps(negative_points),
+        is_sample=is_sample,
+        seed_batch_id=seed_batch_id,
     )
 
     db.add(checkin)
@@ -266,3 +270,21 @@ def build_recent_checkins(db: Session, *, user_id: int, limit: int = 10) -> list
         }
         for row in rows
     ]
+
+
+def delete_sample_checkins(
+    db: Session,
+    *,
+    user_id: int,
+    seed_batch_id: str | None = None,
+) -> int:
+    """Remove synthetic check-ins for a user. If ``seed_batch_id`` is set, only that batch."""
+    q = db.query(DailyCheckin).filter(
+        DailyCheckin.user_id == user_id,
+        DailyCheckin.is_sample.is_(True),
+    )
+    if seed_batch_id is not None:
+        q = q.filter(DailyCheckin.seed_batch_id == seed_batch_id)
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return deleted
