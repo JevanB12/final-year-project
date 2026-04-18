@@ -1,13 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import ChatHeader from "./components/ChatHeader";
 import ChatInput from "./components/ChatInput";
 import ChatStatus from "./components/ChatStatus";
 import MessageList from "./components/MessageList";
 import { useChatFlow } from "./hooks/useChatFlow";
+import { clearAuthSession, getAuthUser, isAuthenticated, type AuthUser } from "./lib/auth";
 
 export default function Home() {
+  const router = useRouter();
+  const [ready, setReady] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+
   const {
     input,
     setInput,
@@ -19,6 +26,29 @@ export default function Home() {
     inputPlaceholder,
     statusText,
   } = useChatFlow();
+
+  useEffect(() => {
+    if (!isAuthenticated()) {
+      router.replace("/signin");
+      return;
+    }
+
+    setUser(getAuthUser());
+    setReady(true);
+  }, [router]);
+
+  function handleLogout() {
+    clearAuthSession();
+    router.replace("/signin");
+  }
+
+  if (!ready) {
+    return (
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <p className="text-slate-500">Loading...</p>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-50 p-6">
@@ -46,6 +76,20 @@ export default function Home() {
                   View your recent progress
                 </p>
               </Link>
+            </div>
+
+            <div className="mt-6 border-t border-slate-100 pt-4">
+              <p className="text-sm font-medium text-slate-900">
+                {user?.username || "Signed in"}
+              </p>
+              <p className="text-xs text-slate-500 mt-1">{user?.email}</p>
+
+              <button
+                onClick={handleLogout}
+                className="mt-4 w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+              >
+                Log out
+              </button>
             </div>
           </aside>
 
