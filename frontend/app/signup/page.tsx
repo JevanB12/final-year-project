@@ -43,7 +43,7 @@ export default function SignupPage() {
 
         <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <input
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-600 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             placeholder="Email"
             type="email"
             value={email}
@@ -52,7 +52,7 @@ export default function SignupPage() {
           />
 
           <input
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-600 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
@@ -60,7 +60,7 @@ export default function SignupPage() {
           />
 
           <input
-            className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none"
+            className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-slate-900 placeholder:text-slate-600 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200"
             placeholder="Password"
             type="password"
             value={password}

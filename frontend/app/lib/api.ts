@@ -1,5 +1,42 @@
 import { getAuthToken } from "./auth";
 
+/** Parse FastAPI-style `{ "detail": ... }` into a short user-facing string. */
+function messageFromErrorBody(status: number, raw: string): string {
+  const trimmed = raw?.trim() ?? "";
+  try {
+    const parsed = JSON.parse(trimmed) as { detail?: unknown };
+    const { detail } = parsed;
+
+    if (typeof detail === "string") {
+      return detail;
+    }
+
+    if (Array.isArray(detail) && detail.length > 0) {
+      const first = detail[0] as { msg?: string };
+      if (first && typeof first.msg === "string") {
+        return first.msg;
+      }
+    }
+  } catch {
+    // not JSON
+  }
+
+  if (status === 401) {
+    return "Invalid email or password.";
+  }
+  if (status === 403) {
+    return "You don't have permission to do that.";
+  }
+  if (status === 404) {
+    return "Not found.";
+  }
+  if (status >= 500) {
+    return "Something went wrong. Please try again.";
+  }
+
+  return "Something went wrong.";
+}
+
 function buildHeaders() {
   const token = typeof window !== "undefined" ? getAuthToken() : null;
 
@@ -19,7 +56,7 @@ export async function postJson<T>(url: string, payload: unknown): Promise<T> {
   const raw = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Backend error ${response.status} at ${url}: ${raw || response.statusText}`);
+    throw new Error(messageFromErrorBody(response.status, raw));
   }
 
   try {
@@ -41,7 +78,7 @@ export async function getJson<T>(url: string): Promise<T> {
   const raw = await response.text();
 
   if (!response.ok) {
-    throw new Error(`Backend error ${response.status} at ${url}: ${raw || response.statusText}`);
+    throw new Error(messageFromErrorBody(response.status, raw));
   }
 
   try {

@@ -482,11 +482,9 @@ expects_reaction_classification: ${String(
       const message = error instanceof Error ? error.message : String(error);
       const userFacingError = message.includes("Failed to fetch")
         ? "Error: could not connect to backend (network/CORS)."
-        : message.startsWith("Backend error")
-        ? `Error: ${message}`
         : message.startsWith("Backend returned invalid JSON")
         ? `Error: ${message}`
-        : "Error: frontend failed while processing backend response.";
+        : `Error: ${message}`;
 
       setMessages((prev) => [
         ...prev,
