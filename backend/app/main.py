@@ -1,10 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import analytics, chat
+from app.api import analytics, auth, chat
 from app.db.database import Base, engine
 
-# create DB tables on startup
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
@@ -17,5 +16,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(chat.router)
 app.include_router(analytics.router)

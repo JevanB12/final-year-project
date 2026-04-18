@@ -6,11 +6,21 @@ from app.db.database import Base
 from sqlalchemy.orm import Mapped, mapped_column
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class DailyCheckin(Base):
     __tablename__ = "daily_checkins"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
 
     checkin_date: Mapped[date] = mapped_column(Date, index=True)
     raw_message: Mapped[str] = mapped_column(Text)
